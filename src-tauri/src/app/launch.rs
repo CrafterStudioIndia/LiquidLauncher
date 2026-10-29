@@ -385,12 +385,12 @@ pub(crate) async fn client_jar(app: &AppHandle, options: &Options) -> Result<Pat
     );
 }
 
+const DEFAULT_CLIENT_JAR_URL: &str =
+    "https://github.com/CrafterStudioIndia/LiquidBounce/releases/download/v1.0.0/liquidbounce-0.37.0.jar";
+
 pub async fn download_client_from_github(destination: &Path) -> Result<()> {
-    let repo = std::env::var("LIQUID_GITHUB_REPO")
-        .unwrap_or_else(|_| "Crafter-Studio/LiquidRemoval".to_string());
-    let url = format!(
-        "https://github.com/{repo}/releases/latest/download/liquidbounce-0.37.0.jar"
-    );
+    let url = std::env::var("LIQUID_CLIENT_JAR_URL")
+        .unwrap_or_else(|_| DEFAULT_CLIENT_JAR_URL.to_string());
     info!("Downloading LiquidBounce jar from {url} to {}", destination.display());
     if let Some(parent) = destination.parent() {
         fs::create_dir_all(parent).await?;

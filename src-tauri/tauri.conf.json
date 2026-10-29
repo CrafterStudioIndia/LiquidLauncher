@@ -53,9 +53,7 @@
     "longDescription": "Starts LiquidBounce for Minecraft 1.21.11 with Fabric. The client jar ships with the launcher; Minecraft, the Fabric loader and Java are downloaded from Mojang, Fabric and Adoptium, and mods come from Modrinth.",
     "license": "GPL-3.0",
     "licenseFile": "../LICENSE",
-    "resources": {
-      "../../liquidbounce-0.37.0-ryoku.jar": "liquidbounce.jar"
-    },
+    "resources": [],
     "targets": [
       "appimage",
       "nsis"

@@ -32,8 +32,10 @@ if [ -f "$JAR_SRC" ]; then
 elif [ -f "$JAR_FALLBACK" ]; then
     echo "[*] Found release mod jar: $JAR_FALLBACK"
 else
-    echo "[!] Warning: No mod jar found at $JAR_SRC or $JAR_FALLBACK."
-    echo "[!] LiquidBounce should be built first via './gradlew build' in LiquidBounce/."
+    echo "[*] No local jar found. Downloading release jar from GitHub..."
+    curl -fsSL -o "$JAR_FALLBACK" "https://github.com/CrafterStudioIndia/LiquidBounce/releases/download/v1.0.0/liquidbounce-0.37.0.jar" || {
+        echo "[!] Warning: Download failed. LiquidLauncher will download the mod upon launch."
+    }
 fi
 
 # 3. Build frontend
