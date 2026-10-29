@@ -1,10 +1,8 @@
 <script>
     import ButtonClose from "../common/ButtonClose.svelte";
     import Logo from "../common/Logo.svelte";
-    import SocialBar from "../common/social/SocialBar.svelte";
     import TitleBar from "../common/TitleBar.svelte";
     import VerticalFlexWrapper from "../common/VerticalFlexWrapper.svelte";
-    import Facts from "./Facts.svelte";
     import LoginModal from "./loginmodal/LoginModal.svelte";
 
     export let options;
@@ -15,14 +13,19 @@
         <Logo />
         <ButtonClose />
     </TitleBar>
-    
+
     <div class="main-section-wrapper">
-        <Facts />
+        <div class="intro">
+            <div class="title">Welcome to LiquidBounce.</div>
+            <div class="description">
+                A local build for Minecraft 1.21.11. Choose a username to play with an
+                offline account; the launcher supplies Minecraft, Fabric and LiquidBounce
+                without asking a remote service for a build.
+            </div>
+        </div>
 
         <LoginModal bind:options />
     </div>
-
-    <SocialBar />
 </VerticalFlexWrapper>
 
 <style>
@@ -32,5 +35,24 @@
         flex: 1;
         padding: 0 50px;
         margin-bottom: 20px;
+    }
+
+    .intro {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        row-gap: 15px;
+        max-width: 450px;
+    }
+
+    .title {
+        font-size: 40px;
+        color: white;
+        font-weight: 600;
+    }
+
+    .description {
+        font-size: 18px;
+        color: rgba(255, 255, 255, 0.5);
     }
 </style>

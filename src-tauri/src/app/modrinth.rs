@@ -33,7 +33,7 @@ use serde_json::json;
 use tokio::fs;
 use tracing::warn;
 
-use crate::app::client_api::{LoaderMod, ModSource};
+use crate::app::launch::{LoaderMod, ModSource};
 use crate::utils::{count, sha1sum};
 use crate::HTTP_CLIENT;
 

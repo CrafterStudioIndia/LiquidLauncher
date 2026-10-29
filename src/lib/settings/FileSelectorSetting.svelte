@@ -1,4 +1,5 @@
 <script>
+    import {createEventDispatcher} from "svelte";
     import {open as dialogOpen} from "@tauri-apps/plugin-dialog";
 
     export let title;
@@ -6,6 +7,8 @@
     export let value;
     export let filters;
     export let windowTitle;
+
+    const dispatch = createEventDispatcher();
 
     async function handleFileSelect(e) {
         const selected = await dialogOpen({
@@ -18,6 +21,7 @@
 
         if (selected) {
             value = selected;
+            dispatch("change", selected);
         }
     }
 </script>

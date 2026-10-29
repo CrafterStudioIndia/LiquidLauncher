@@ -16,19 +16,12 @@
  * You should have received a copy of the GNU General Public License
  * along with LiquidLauncher. If not, see <https://www.gnu.org/licenses/>.
  */
-use crate::app::client_api::Client;
 use crate::{utils, LAUNCHER_VERSION};
 use tracing::{debug, debug_span, info};
 
 #[tauri::command]
 pub(crate) async fn get_launcher_version() -> Result<String, String> {
     Ok(LAUNCHER_VERSION.to_string())
-}
-
-#[tauri::command]
-pub(crate) async fn setup_client(session_token: String) -> Result<Client, String> {
-    Client::lookup(session_token)
-        .await
 }
 
 #[tauri::command]

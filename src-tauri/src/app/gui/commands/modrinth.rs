@@ -17,84 +17,86 @@
  * along with LiquidLauncher. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use tauri::State;
 use tracing::warn;
 
 use super::{failed, search_query};
-use crate::app::builds;
-use crate::app::client_api::Client;
-use crate::app::gui::AppState;
+use crate::app::instances;
+use crate::app::launch::{self, LoaderMod, ModSource};
 use crate::app::modrinth::{self, Held, ModrinthMod, Search};
 use crate::app::options::Options;
 use crate::minecraft::prelauncher;
 
-/// Modrinth mods for the selected build that it does not come with, and whether each is installed.
+/// Mods Modrinth has for Minecraft 1.21.11 and Fabric, and whether each is installed in the
+/// selected instance.
 #[tauri::command]
 pub(crate) async fn modrinth_search(
-    client: Client,
     options: Options,
     query: Option<String>,
-    app_state: State<'_, AppState>,
 ) -> Result<Search, String> {
     async {
-        let build = builds::selected(&client, &options, &app_state.build).await?;
+        let data = options.start_options.data_directory();
+        let instance = instances::selected(&data, &options.launcher_options.instance).await?;
+        let directory = prelauncher::custom_mods_directory(
+            &data,
+            &instance.id,
+            launch::SUPPORTED_MC_VERSION,
+        );
+
         let query = search_query(&query);
         // A file the user added counts as installed once Modrinth knows it.
-        let files = async {
-            let dir = prelauncher::custom_mods_directory(
-                &options.start_options.data_directory(),
-                &build.branch,
-                &build.mc_version,
-            );
-            anyhow::Ok(
-                modrinth::file_projects(&dir)
-                    .await
-                    .inspect_err(|error| warn!("Failed to look up mod files: {:?}", error))
-                    .unwrap_or_default(),
-            )
-        };
-        let (hits, manifest, recommended, mut installed) = tokio::try_join!(
-            modrinth::search(query, &build.mc_version, &build.subsystem),
-            client.fetch_launch_manifest(build.build_id),
-            client.fetch_mods(&build.mc_version, &build.subsystem),
-            files,
-        )?;
+        let files = modrinth::file_projects(&directory)
+            .await
+            .inspect_err(|error| warn!("Failed to look up mod files: {:?}", error))
+            .unwrap_or_default();
 
-        let branch = options.version_options.options.get(&build.branch);
+        let mut installed: Vec<String> = files.into_iter().collect();
+        let branch = options.version_options.options.get(&instance.id);
         installed.extend(
             branch
-                .and_then(|branch| branch.modrinth_mods.get(&build.mc_version))
+                .and_then(|branch| branch.modrinth_mods.get(launch::SUPPORTED_MC_VERSION))
                 .into_iter()
                 .flatten()
                 .map(|installed| installed.project_id.clone()),
         );
 
+        // Fabric API is installed by the launcher, so Modrinth must not offer it again.
+        let fabric_api = launch::fabric_api().await.ok().map(|api| LoaderMod {
+            required: true,
+            enabled: true,
+            name: "Fabric API".to_owned(),
+            source: ModSource::Repository {
+                repository: "modrinth".to_owned(),
+                artifact: format!("maven.modrinth:fabric-api:{}", api.version_id),
+            },
+        });
+        let built_in: Vec<LoaderMod> = fabric_api.into_iter().collect();
+        let installed: std::collections::HashSet<String> = installed.into_iter().collect();
+
+        let hits = modrinth::search(query, launch::SUPPORTED_MC_VERSION, launch::LOADER).await?;
         let hits = modrinth::tell(
             hits,
             &Held {
-                launched: &manifest.mods,
-                recommended: &recommended,
+                launched: &built_in,
+                recommended: &built_in,
                 installed: &installed,
             },
         );
-        anyhow::Ok(Search::new(hits, query, &build.mc_version, &build.subsystem))
+
+        anyhow::Ok(Search::new(
+            hits,
+            query,
+            launch::SUPPORTED_MC_VERSION,
+            launch::LOADER,
+        ))
     }
     .await
     .map_err(failed("search Modrinth"))
 }
 
-/// The newest version of a project for the selected build, to install or to update to.
+/// The newest version of a project for Minecraft 1.21.11 and Fabric, to install or update to.
 #[tauri::command]
-pub(crate) async fn modrinth_install(
-    client: Client,
-    options: Options,
-    project_id: String,
-    app_state: State<'_, AppState>,
-) -> Result<ModrinthMod, String> {
-    async {
-        let build = builds::selected(&client, &options, &app_state.build).await?;
-        modrinth::newest(&project_id, &build.mc_version, &build.subsystem).await
-    }
-    .await
-    .map_err(failed("install from Modrinth"))
+pub(crate) async fn modrinth_install(project_id: String) -> Result<ModrinthMod, String> {
+    modrinth::newest(&project_id, launch::SUPPORTED_MC_VERSION, launch::LOADER)
+        .await
+        .map_err(failed("install from Modrinth"))
 }

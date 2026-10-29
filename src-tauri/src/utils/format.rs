@@ -17,17 +17,6 @@
  * along with LiquidLauncher. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use chrono::{Datelike, NaiveDateTime, Utc};
-
-/// `Sep 26`, with the year when it is not this one.
-pub fn short_date(date: NaiveDateTime) -> String {
-    if date.year() == Utc::now().year() {
-        date.format("%b %-d").to_string()
-    } else {
-        date.format("%b %-d, %Y").to_string()
-    }
-}
-
 /// `1,234 downloads`, or `1 download` with `one`.
 pub fn count(n: u64, one: &str, many: &str) -> String {
     let digits = n.to_string();

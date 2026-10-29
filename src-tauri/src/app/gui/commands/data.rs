@@ -17,33 +17,15 @@
  * along with LiquidLauncher. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use tracing::warn;
-
 use crate::{
     app::options::Options,
-    auth::shared,
     LAUNCHER_DIRECTORY
 };
 
 #[tauri::command]
 pub(crate) async fn get_options() -> Result<Options, String> {
     let config_dir = LAUNCHER_DIRECTORY.config_dir();
-    let mut options = Options::load(config_dir).await.unwrap_or_default();
-
-    if let Some(account) = options.premium_options.account.take() {
-        let data = options.start_options.data_directory();
-        let moved = async {
-            if shared::read(&data).await?.is_none() {
-                shared::write(&data, Some(&account)).await?;
-            }
-            options.store(config_dir).await
-        };
-        if let Err(error) = moved.await {
-            warn!("Failed to move the client account to LiquidBounce: {:?}", error);
-        }
-    }
-
-    Ok(options)
+    Ok(Options::load(config_dir).await.unwrap_or_default())
 }
 
 #[tauri::command]
@@ -59,6 +41,12 @@ pub(crate) async fn store_options(options: Options) -> Result<(), String> {
 #[tauri::command]
 pub(crate) async fn clear_data(options: Options) -> Result<(), String> {
     let data_directory = options.start_options.data_directory();
+    if data_directory.as_os_str().is_empty()
+        || data_directory == std::path::Path::new("/")
+        || Some(&data_directory) == dirs::home_dir().as_ref()
+    {
+        return Err("Refusing to clear invalid or root data directory".to_string());
+    }
 
     [
         "assets",
@@ -71,7 +59,7 @@ pub(crate) async fn clear_data(options: Options) -> Result<(), String> {
     ]
         .iter()
         .map(|dir| data_directory.join(dir))
-        .filter(|dir| dir.exists())
+        .filter(|dir| dir.exists() && dir.parent() == Some(data_directory.as_path()))
         .map(std::fs::remove_dir_all)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("unable to clear data: {:?}", e))?;

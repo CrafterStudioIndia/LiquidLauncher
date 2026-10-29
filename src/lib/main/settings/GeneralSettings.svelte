@@ -1,15 +1,19 @@
 <script>
+    import {createEventDispatcher} from "svelte";
     import SelectSetting from "../../settings/SelectSetting.svelte";
     import FileSelectorSetting from "../../settings/FileSelectorSetting.svelte";
     import DirectorySelectorSetting from "../../settings/DirectorySelectorSetting.svelte";
     import RangeSetting from "../../settings/RangeSetting.svelte";
     import ToggleSetting from "../../settings/ToggleSetting.svelte";
     import ButtonSetting from "../../settings/ButtonSetting.svelte";
+    import Description from "../../settings/Description.svelte";
     import LauncherVersion from "../../settings/LauncherVersion.svelte";
     import {onMount} from "svelte";
     import {invoke} from "@tauri-apps/api/core";
 
     export let options;
+
+    const dispatch = createEventDispatcher();
 
     let launcherVersion = "";
     let defaultDataFolder = "";
@@ -17,8 +21,9 @@
 
     async function clearData() {
         try {
-            await invoke("clear_data", { options });
+            await invoke("clear_data", {options});
             alert("Data cleared.");
+            dispatch("refreshInfo");
         } catch (error) {
             console.error("Failed to clear data:", error);
             alert(`Failed to clear data: ${error}`);
@@ -27,13 +32,19 @@
 
     async function logout() {
         try {
-            await invoke("logout", { accountData: options.start.account });
+            await invoke("logout");
             options.start.account = null;
             await options.store();
         } catch (error) {
             console.error("Logout failed:", error);
             alert("Failed to logout properly. Please try again.");
         }
+    }
+
+    async function useBundledJar() {
+        options.start.clientJar = "";
+        await options.store();
+        dispatch("refreshInfo");
     }
 
     function resetJavaDistribution() {
@@ -120,6 +131,21 @@
     disabled={false}
     bind:value={options.launcher.keepLauncherOpen}
 />
+
+<Description description="LiquidBounce is launched from this jar. Leave it empty to use the jar bundled with the launcher." />
+
+<FileSelectorSetting
+        title="LiquidBounce jar"
+        placeholder="Bundled jar"
+        bind:value={options.start.clientJar}
+        filters={[{ name: "Minecraft mod", extensions: ["jar"] }]}
+        windowTitle="Select a LiquidBounce jar"
+        on:change={() => dispatch("refreshInfo")}
+/>
+
+{#if options.start.clientJar}
+    <ButtonSetting text="Use the bundled jar" color="#5b5b5b" on:click={useBundledJar} />
+{/if}
 
 <ButtonSetting
     text="Sign out of Minecraft Account"

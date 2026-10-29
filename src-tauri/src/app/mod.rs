@@ -1,7 +1,7 @@
 /*
  * This file is part of LiquidLauncher (https://github.com/CCBlueX/LiquidLauncher)
  *
- * Copyright (c) 2015 - 2024 CCBlueX
+ * Copyright (c) 2015 - 2026 CCBlueX
  *
  * LiquidLauncher is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,12 +17,10 @@
  * along with LiquidLauncher. If not, see <https://www.gnu.org/licenses/>.
  */
 
+pub mod background;
 pub mod gui;
-
-pub mod options;
-pub mod webview;
-pub mod client_api;
-pub mod client_api_target;
-pub mod marketplace;
+pub mod instances;
+pub mod launch;
 pub mod modrinth;
-pub mod builds;
+pub mod options;
+pub mod skins;

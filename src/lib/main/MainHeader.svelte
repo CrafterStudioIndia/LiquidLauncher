@@ -25,9 +25,9 @@
     </StatusBar>
     <Account
             username={account?.name}
-            uuid={account?.id}
             accountType={account?.type}
             on:showSettings
+            on:showSkins
     />
     <ButtonClose />
 </TitleBar>

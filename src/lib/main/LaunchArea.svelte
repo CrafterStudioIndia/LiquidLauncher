@@ -6,18 +6,15 @@
     export let versionInfo;
     export let mcVersion;
     export let lbVersion;
+    export let instance = null;
+    export let instances = [];
     export let running;
     export let canLaunch = true;
 
     const dispatch = createEventDispatcher();
 
-    function parseChangelog(text) {
-        text = text.replaceAll("[a]", "&bull;");
-        text = text.replaceAll("[i]", "&bull;");
-        text = text.replaceAll("[b]", "&bull;");
-        text = text.replaceAll("[r]", "&bull;");
-
-        return text;
+    function selectInstance(event) {
+        dispatch("selectInstance", event.currentTarget.value);
     }
 </script>
 
@@ -29,19 +26,27 @@
         </div>
     </div>
 
-    <pre class="description">
-        {@html parseChangelog(versionInfo.description)}
-    </pre>
+    <div class="instance-selector">
+        <label class="label" for="instance">Instance</label>
+        <div class="instance-row">
+            <select id="instance" class="select" value={instance?.id ?? ""} on:change={selectInstance} disabled={running || instances.length === 0}>
+                {#each instances as entry (entry.id)}
+                    <option value={entry.id}>{entry.name}</option>
+                {/each}
+            </select>
+            <button class="manage" type="button" on:click={() => dispatch("manageInstances")}>Manage</button>
+        </div>
+    </div>
 
     <div class="version-selector">
         <ButtonVersion icon="lb" title={lbVersion} subtitle="LiquidBounce" on:click={() => dispatch("showVersionSelect")} />
-        <ButtonVersion icon="mc" title="1.7 - {mcVersion}" subtitle="Minecraft" on:click={() => dispatch("showVersionSelect")} />
-    </div> 
+        <ButtonVersion icon="mc" title={mcVersion} subtitle="Minecraft" on:click={() => dispatch("showVersionSelect")} />
+    </div>
 
     {#if running}
         <div class="running-button-wrapper">
-            <ButtonLaunchArea text="Terminate" active={true} on:click={() => dispatch("terminate")} /> 
-            <ButtonLaunchArea text="Log" active={false} on:click={() => dispatch("showClientLog")} />  
+            <ButtonLaunchArea text="Terminate" active={true} on:click={() => dispatch("terminate")} />
+            <ButtonLaunchArea text="Log" active={false} on:click={() => dispatch("showClientLog")} />
         </div>
     {:else}
         <ButtonLaunchArea
@@ -90,16 +95,53 @@
         right: 8px;
     }
 
-    .description {
-        flex: 1;
+    .instance-selector {
+        display: flex;
+        flex-direction: column;
+        row-gap: 5px;
+    }
+
+    .label {
         font-size: 12px;
         color: rgba(255, 255, 255, .5);
-        overflow: auto;
-        white-space: pre-line;
+    }
+
+    .instance-row {
+        display: grid;
+        grid-template-columns: 1fr max-content;
+        column-gap: 8px;
+    }
+
+    .select {
+        width: 100%;
+        background-color: rgba(0, 0, 0, .26);
+        border: none;
+        border-bottom: solid 1px #4677FF;
+        color: white;
         font-family: "Inter", sans-serif;
-        font-weight: 400;
+        padding: 7px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .select option {
+        background-color: white;
+        color: black;
+    }
+
+    .manage {
+        background-color: rgba(0, 0, 0, .26);
+        border: solid 1px #4677FF;
+        border-radius: 4px;
+        color: white;
+        font-family: "Inter", sans-serif;
         font-size: 12px;
-        overflow-x: hidden;
+        padding: 0 12px;
+        cursor: pointer;
+    }
+
+    .manage:hover {
+        background-color: rgba(70, 119, 255, .2);
     }
 
     .version-selector {

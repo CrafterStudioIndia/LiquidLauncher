@@ -17,9 +17,11 @@
  * along with LiquidLauncher. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use async_compression::tokio::bufread::GzipDecoder;
 use async_zip::base::read::seek::ZipFileReader;
+use futures::StreamExt;
+use path_absolutize::Absolutize;
 use std::path::{Path, PathBuf};
 use tokio::fs::{create_dir_all, OpenOptions};
 use tokio::io;
@@ -27,34 +29,34 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeek, BufReader};
 use tokio_util::compat::FuturesAsyncReadCompatExt;
 
 /// Extracts everything from the ZIP archive to the output directory
-///
-/// Taken from https://github.com/Majored/rs-async-zip/blob/main/examples/file_extraction.rs
 pub async fn zip_extract<R>(archive: R, out_dir: &Path) -> Result<()>
 where
     R: AsyncRead + AsyncSeek + Unpin,
 {
+    let out_dir_abs = out_dir.absolutize()?;
     let mut reader = ZipFileReader::with_tokio(BufReader::new(archive)).await?;
     for index in 0..reader.file().entries().len() {
         let entry = reader.file().entries().get(index).unwrap();
         let file_name = entry.filename().as_str()?.to_owned();
+        let sanitized = sanitize_file_path(&file_name);
+        if sanitized.as_os_str().is_empty() {
+            continue;
+        }
 
-        let path = out_dir.join(sanitize_file_path(&file_name));
-        // If the filename of the entry ends with '/', it is treated as a directory.
-        // This is implemented by previous versions of this crate and the Python Standard Library.
-        // https://docs.rs/async_zip/0.0.8/src/async_zip/read/mod.rs.html#63-65
-        // https://github.com/python/cpython/blob/820ef62833bd2d84a141adedd9a05998595d6b6d/Lib/zipfile.py#L528
+        let path = out_dir.join(&sanitized);
+        let path_abs = path.absolutize_from(out_dir);
+        if !path_abs.starts_with(&out_dir_abs) {
+            bail!("Zip slip detected: '{}' escapes output directory", file_name);
+        }
+
         let entry_is_dir = file_name.ends_with('/');
-
         let mut entry_reader = reader.reader_without_entry(index).await?.compat();
 
         if entry_is_dir {
-            // The directory may have been created if iteration is out of order.
             if !path.exists() {
                 create_dir_all(&path).await?;
             }
         } else {
-            // Creates parent directories. They may not exist if iteration is out of order
-            // or the archive does not contain directory entries.
             let parent = path.parent().unwrap();
             if !parent.is_dir() {
                 create_dir_all(parent).await?;
@@ -63,6 +65,7 @@ where
             let mut writer = OpenOptions::new()
                 .write(true)
                 .create(true)
+                .truncate(true)
                 .open(&path)
                 .await
                 .context("Failed to create extracted file")?;
@@ -81,7 +84,19 @@ where
     decoder.read_to_end(&mut decoded_data).await?;
 
     let mut ar = tokio_tar::Archive::new(&decoded_data[..]);
-    ar.unpack(out_dir).await?;
+    let mut entries = ar.entries()?;
+    while let Some(entry) = entries.next().await {
+        let mut entry = entry?;
+        let entry_path = entry.path()?.into_owned();
+        if entry_path.is_absolute()
+            || entry_path
+                .components()
+                .any(|c| matches!(c, std::path::Component::ParentDir | std::path::Component::RootDir | std::path::Component::Prefix(_)))
+        {
+            bail!("Tar archive entry escapes target directory: {}", entry_path.display());
+        }
+        entry.unpack_in(out_dir).await?;
+    }
     Ok(())
 }
 

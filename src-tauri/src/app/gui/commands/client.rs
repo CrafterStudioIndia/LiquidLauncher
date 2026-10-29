@@ -17,215 +17,169 @@
  * along with LiquidLauncher. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use anyhow::anyhow;
-use backon::{ExponentialBuilder, Retryable};
-use std::path::{Path, PathBuf};
+use anyhow::{anyhow, bail};
+use serde::Serialize;
+use std::path::PathBuf;
 use std::{
     sync::{Arc, Mutex},
     thread,
 };
-use minecraft_auth::java::JavaAuthManager;
-use minecraft_auth::msa::constants::JAVA_TITLE_ID;
-use tauri::{Emitter, Window};
+use tauri::{AppHandle, Emitter, Window};
 use tokio::fs;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use uuid::Uuid;
 
 use super::failed;
-use crate::app::builds::{self, BuildPage};
-use crate::app::client_api::{BlogPost, Build, Changelog, Client, PaginatedResponse};
-use crate::app::client_api::LoaderMod;
-use crate::app::marketplace::{self, GameDir};
+use crate::app::instances::{self, Instance};
+use crate::app::launch::{self, LoaderMod, VersionInfo};
 use crate::app::modrinth::{self, CustomMod};
 use crate::app::options::Options;
-use crate::auth::{shared, ClientAccount};
-use crate::{app::gui::{AppState, RunnerInstance, ShareableWindow}, minecraft::{
-    auth::MinecraftAccount,
+use crate::app::skins;
+use crate::minecraft::auth::MinecraftAccount;
+use crate::minecraft::{
     launcher::{LauncherData, StartParameter},
     prelauncher,
     progress::ProgressUpdate,
-}, HTTP_CLIENT};
+};
+use crate::app::gui::{AppState, RunnerInstance, ShareableWindow};
 
-/// The build selected to launch, or `None` when the chosen one is gone.
+/// The offline client id Minecraft uses for every launcher that does not sign in.
+const CLIENT_ID: &str = "00000000402b5328";
+
+/// Everything the main screen shows before a launch, all resolved locally or from Mojang and
+/// Fabric's public metadata.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LaunchInfo {
+    pub version: VersionInfo,
+    pub selected: Instance,
+    pub instances: Vec<Instance>,
+    pub client_jar: String,
+}
+
 #[tauri::command]
-pub(crate) async fn request_build(
-    client: Client,
+pub(crate) async fn get_launch_info(
+    app: AppHandle,
     options: Options,
-    app_state: tauri::State<'_, AppState>,
-) -> Result<Option<Build>, String> {
-    let chosen = options.version_options.build_id != -1;
-    let is_gone = |error: &anyhow::Error| {
-        chosen
-            && error
-                .downcast_ref::<reqwest::Error>()
-                .and_then(reqwest::Error::status)
-                == Some(reqwest::StatusCode::NOT_FOUND)
-    };
+) -> Result<LaunchInfo, String> {
+    async {
+        let data = options.start_options.data_directory();
+        let selected = instances::selected(&data, &options.launcher_options.instance).await?;
+        let version = launch::version_info(&app, &options).await?;
+        let listed = instances::list(&data).await?;
+        let client_jar = launch::client_jar(&app, &options).await?;
 
-    let build = (|| async { builds::fetch_selected(&client, &options, &app_state.build).await })
-        .retry(ExponentialBuilder::default())
-        .when(|error| !is_gone(error))
-        .notify(|err, dur| {
-            warn!("Failed to request the build. Retrying in {:?}. Error: {}", dur, err);
+        anyhow::Ok(LaunchInfo {
+            version,
+            selected,
+            instances: listed,
+            client_jar: client_jar.to_string_lossy().into_owned(),
         })
-        .await;
-
-    match build {
-        Ok(build) => Ok(Some(build)),
-        Err(error) if is_gone(&error) => Ok(None),
-        Err(error) => Err(format!("unable to request the build: {:?}", error)),
     }
-}
-
-/// A page of the builds to choose from, releases or all of them as the options show them.
-#[tauri::command]
-pub(crate) async fn request_build_page(
-    client: Client,
-    options: Options,
-    page: u32,
-) -> Result<BuildPage, String> {
-    builds::page(
-        &client,
-        page,
-        options.launcher_options.show_nightly_builds,
-        options.version_options.build_id,
-    )
     .await
-    .map_err(failed("request builds"))
+    .map_err(failed("read the local version"))
 }
 
-#[tauri::command]
-pub(crate) async fn fetch_blog_posts(client: Client, page: u32) -> Result<PaginatedResponse<BlogPost>, String> {
-    (|| async { client.blog_posts(page).await })
-        .retry(ExponentialBuilder::default())
-        .notify(|err, dur| {
-            warn!("Failed to fetch blog posts. Retrying in {:?}. Error: {}", dur, err);
-        })
-        .await
-        .map_err(|e| format!("unable to fetch blog posts: {:?}", e))
-}
-
-#[tauri::command]
-pub(crate) async fn fetch_changelog(client: Client, build_id: u32) -> Result<Changelog, String> {
-    (|| async { client.fetch_changelog(build_id).await })
-        .retry(ExponentialBuilder::default())
-        .notify(|err, dur| {
-            warn!("Failed to fetch changelog. Retrying in {:?}. Error: {}", dur, err);
-        })
-        .await
-        .map_err(|e| format!("unable to fetch changelog: {:?}", e))
-}
-
-#[tauri::command]
-pub(crate) async fn request_mods(
-    client: Client,
-    mc_version: &str,
-    subsystem: &str,
-) -> Result<Vec<LoaderMod>, String> {
-    let mods = (|| async { client.fetch_mods(&mc_version, &subsystem).await })
-        .retry(ExponentialBuilder::default())
-        .notify(|err, dur| {
-            warn!("Failed to request mods. Retrying in {:?}. Error: {}", dur, err);
-        })
-        .await
-        .map_err(|e| format!("unable to request mods: {:?}", e))?;
-
-    Ok(mods)
-}
-
-/// The mods from Modrinth and from files. Without `check` it reads the options and the disk alone
-/// and returns at once.
+/// The mods in an instance's folder, and the Modrinth updates for them when `check` is set.
 #[tauri::command]
 pub(crate) async fn get_custom_mods(
     options: Options,
-    branch: &str,
-    mc_version: &str,
-    subsystem: &str,
     check: bool,
 ) -> Result<Vec<CustomMod>, String> {
-    let branch_options = options
-        .version_options
-        .options
-        .get(branch)
-        .cloned()
-        .unwrap_or_default();
-    let installed = branch_options
-        .modrinth_mods
-        .get(mc_version)
-        .map(Vec::as_slice)
-        .unwrap_or_default();
+    async {
+        let data = options.start_options.data_directory();
+        let instance = instances::selected(&data, &options.launcher_options.instance).await?;
+        let branch_options = options
+            .version_options
+            .options
+            .get(&instance.id)
+            .cloned()
+            .unwrap_or_default();
+        let installed = branch_options
+            .modrinth_mods
+            .get(launch::SUPPORTED_MC_VERSION)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
 
-    modrinth::custom_mods(
-        &prelauncher::custom_mods_directory(
-            &options.start_options.data_directory(),
-            branch,
-            mc_version,
-        ),
-        installed,
-        &branch_options.custom_mod_states,
-        mc_version,
-        subsystem,
-        check,
-    )
+        modrinth::custom_mods(
+            &prelauncher::custom_mods_directory(
+                &data,
+                &instance.id,
+                launch::SUPPORTED_MC_VERSION,
+            ),
+            installed,
+            &branch_options.custom_mod_states,
+            launch::SUPPORTED_MC_VERSION,
+            launch::LOADER,
+            check,
+        )
+        .await
+    }
     .await
-    .map_err(|e| format!("unable to read custom mods: {:?}", e))
+    .map_err(failed("read the mods"))
 }
 
 #[tauri::command]
-pub(crate) async fn install_custom_mod(
-    options: Options,
-    branch: &str,
-    mc_version: &str,
-    path: PathBuf,
-) -> Result<(), String> {
-    let mod_cache_path = prelauncher::custom_mods_directory(
-        &options.start_options.data_directory(),
-        branch,
-        mc_version,
-    );
+pub(crate) async fn install_custom_mod(options: Options, path: PathBuf) -> Result<(), String> {
+    async {
+        if !path.is_file() {
+            bail!("Selected file does not exist.");
+        }
+        let file_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| anyhow!("That file has no valid name."))?;
 
-    if !mod_cache_path.exists() {
-        fs::create_dir_all(&mod_cache_path).await.unwrap();
+        if !file_name.to_lowercase().ends_with(".jar") {
+            bail!("Only .jar mod files can be installed.");
+        }
+        if file_name.contains('/') || file_name.contains('\\') || file_name.contains("..") {
+            bail!("Invalid file name.");
+        }
+
+        let data = options.start_options.data_directory();
+        let instance = instances::selected(&data, &options.launcher_options.instance).await?;
+        let directory = prelauncher::custom_mods_directory(
+            &data,
+            &instance.id,
+            launch::SUPPORTED_MC_VERSION,
+        );
+
+        fs::create_dir_all(&directory).await?;
+        fs::copy(&path, directory.join(file_name)).await?;
+        anyhow::Ok(())
     }
-
-    if let Some(file_name) = path.file_name() {
-        let dest_path = mod_cache_path.join(file_name.to_str().unwrap());
-
-        fs::copy(path, dest_path)
-            .await
-            .map_err(|e| format!("unable to copy custom mod: {:?}", e))?;
-        return Ok(());
-    }
-
-    Err("unable to copy custom mod: invalid path".to_string())
+    .await
+    .map_err(failed("install the mod"))
 }
 
 #[tauri::command]
-pub(crate) async fn delete_custom_mod(
-    options: Options,
-    branch: &str,
-    mc_version: &str,
-    mod_name: &str,
-) -> Result<(), String> {
-    let mod_cache_path = prelauncher::custom_mods_directory(
-        &options.start_options.data_directory(),
-        branch,
-        mc_version,
-    );
+pub(crate) async fn delete_custom_mod(options: Options, mod_name: String) -> Result<(), String> {
+    async {
+        if mod_name.contains('/') || mod_name.contains('\\') || mod_name.contains("..") {
+            bail!("Invalid mod name.");
+        }
+        if !mod_name.to_lowercase().ends_with(".jar") {
+            bail!("Mod file must end with .jar.");
+        }
 
-    if !mod_cache_path.exists() {
-        return Ok(());
+        let data = options.start_options.data_directory();
+        let instance = instances::selected(&data, &options.launcher_options.instance).await?;
+        let directory = prelauncher::custom_mods_directory(
+            &data,
+            &instance.id,
+            launch::SUPPORTED_MC_VERSION,
+        );
+        let path = directory.join(&mod_name);
+
+        // Only delete a file that really sits inside this instance's folder.
+        if path.is_file() && path.parent() == Some(directory.as_path()) {
+            fs::remove_file(path).await?;
+        }
+        anyhow::Ok(())
     }
-
-    let mod_path = mod_cache_path.join(mod_name);
-
-    if mod_path.exists() {
-        fs::remove_file(mod_path)
-            .await
-            .map_err(|e| format!("unable to delete custom mod: {:?}", e))?;
-    }
-
-    Ok(())
+    .await
+    .map_err(failed("delete the mod"))
 }
 
 fn handle_stdout(window: &ShareableWindow, data: &[u8]) -> anyhow::Result<()> {
@@ -283,8 +237,7 @@ fn handle_log(window: &ShareableWindow, msg: &str) -> anyhow::Result<()> {
 
 #[tauri::command]
 pub(crate) async fn run_client(
-    client: Client,
-    build_id: u32,
+    app: AppHandle,
     options: Options,
     mods: Vec<LoaderMod>,
     window: Window,
@@ -297,19 +250,23 @@ pub(crate) async fn run_client(
     let minecraft_account = options
         .start_options
         .minecraft_account
+        .clone()
         .ok_or("no account selected")?;
-    let (account_name, uuid, token, user_type) = match minecraft_account {
-        MinecraftAccount::MsaAccount { state, name, id } => {
-            let manager = JavaAuthManager::from_json(HTTP_CLIENT.clone(), &state)
-                .map_err(|e| format!("unable to load account: {}", e))?;
-            let token = manager
-                .minecraft_token()
-                .await
-                .map_err(|e| format!("unable to refresh account: {}", e))?;
-            (name, id.to_string(), token.access_token, "msa".to_string())
-        }
-        MinecraftAccount::OfflineAccount { name, id, .. } => {
-            (name, id.to_string(), "-".to_string(), "legacy".to_string())
+    let (account_name, uuid, token, user_type) = match &minecraft_account {
+        MinecraftAccount::OfflineAccount { name, id } => {
+            let trimmed = name.trim();
+            if trimmed.is_empty()
+                || trimmed.len() > 16
+                || !trimmed.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            {
+                return Err("Invalid Minecraft offline username.".to_string());
+            }
+            (
+                trimmed.to_string(),
+                id.to_string(),
+                "-".to_string(),
+                "legacy".to_string(),
+            )
         }
     };
 
@@ -326,26 +283,19 @@ pub(crate) async fn run_client(
         return Err("client is already running".to_string());
     }
 
-    let client_account = if options.premium_options.skip_advertisement {
-        premium_account(&client, &data)
-            .await
-            .unwrap_or_else(|e| {
-                let message = format!("Failed to authenticate client account: {:?}", e);
-                let _ = handle_stderr(&shareable_window, message.as_bytes());
-                None
-            })
-    } else {
-        None
-    };
-    let skip_advertisement = client_account.is_some();
+    let instance = instances::selected(&data, &options.launcher_options.instance)
+        .await
+        .map_err(|e| format!("unable to select the instance: {e:#}"))?;
 
-    info!("Loading launch manifest...");
-    let launch_manifest = client.fetch_launch_manifest(build_id).await.map_err(|e| {
-        format!(
-            "failed to fetch launch manifest of build {}: {:?}",
-            build_id, e
-        )
-    })?;
+    info!("Preparing LiquidBounce for instance {}...", instance.name);
+    skins::sync_for_launch(&data, &instance.id, &account_name).await;
+    let launch_manifest = launch::manifest(&app, &options, &instance)
+        .await
+        .map_err(|e| format!("failed to prepare the local build: {e:#}"))?;
+
+    if let Err(error) = instances::touch(&data, &instance.id).await {
+        error!("Failed to record the last launch: {:?}", error);
+    }
 
     let (terminator_tx, terminator_rx) = tokio::sync::oneshot::channel();
 
@@ -356,15 +306,13 @@ pub(crate) async fn run_client(
     });
 
     let copy_of_runner_instance = runner_instance.clone();
-    let branch = launch_manifest.build.branch.clone();
-    marketplace::game_started();
 
     let parameters = StartParameter {
-        java_distribution: options.start_options.java_distribution,
-        jvm_args: options.start_options.jvm_args.unwrap_or_else(|| vec![]),
+        java_distribution: options.start_options.java_distribution.clone(),
+        jvm_args: options.start_options.jvm_args.clone().unwrap_or_default(),
         memory: options.start_options.memory,
         custom_data_path: if !options.start_options.custom_data_path.is_empty() {
-            Some(options.start_options.custom_data_path)
+            Some(options.start_options.custom_data_path.clone())
         } else {
             None
         },
@@ -372,14 +320,11 @@ pub(crate) async fn run_client(
         auth_uuid: uuid,
         auth_access_token: token,
         auth_xuid: xuid,
-        clientid: JAVA_TITLE_ID.to_string(),
+        clientid: CLIENT_ID.to_string(),
         user_type,
         keep_launcher_open: options.launcher_options.keep_launcher_open,
         concurrent_downloads: options.launcher_options.concurrent_downloads,
-        client,
-        client_account,
-        skip_advertisement,
-        vanilla_integration: options.start_options.installation,
+        vanilla_integration: options.start_options.installation.clone(),
     };
 
     thread::spawn(move || {
@@ -415,7 +360,6 @@ pub(crate) async fn run_client(
                         .unwrap();
                     handle_stderr(&shareable_window, message.as_bytes()).unwrap();
                 };
-                marketplace::game_exited(&GameDir::new(data, branch)).await;
 
                 *copy_of_runner_instance
                     .lock()
@@ -430,15 +374,6 @@ pub(crate) async fn run_client(
     });
 
     Ok(())
-}
-
-async fn premium_account(client: &Client, data: &Path) -> anyhow::Result<Option<ClientAccount>> {
-    let Some(account) = shared::read(data).await? else {
-        return Ok(None);
-    };
-    let account = shared::renew(data, account).await?;
-    let premium = client.fetch_user(&account).await?.premium;
-    Ok(premium.then_some(account))
 }
 
 #[tauri::command]

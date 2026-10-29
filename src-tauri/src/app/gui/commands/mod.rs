@@ -17,23 +17,25 @@
  * along with LiquidLauncher. If not, see <https://www.gnu.org/licenses/>.
  */
 
+pub(crate) mod appearance;
 pub(crate) mod auth;
 pub(crate) mod client;
 pub(crate) mod data;
-pub(crate) mod marketplace;
-pub(crate) mod system;
+pub(crate) mod instances;
 pub(crate) mod minecraft_installation;
-pub(crate) mod updater;
 pub(crate) mod modrinth;
+pub(crate) mod skins;
+pub(crate) mod system;
 
+pub(crate) use appearance::*;
 pub(crate) use auth::*;
 pub(crate) use client::*;
 pub(crate) use data::*;
-pub(crate) use marketplace::*;
-pub(crate) use system::*;
+pub(crate) use instances::*;
 pub(crate) use minecraft_installation::*;
-pub(crate) use updater::*;
 pub(crate) use modrinth::*;
+pub(crate) use skins::*;
+pub(crate) use system::*;
 
 /// Turns an error into the message the frontend shows: `Unable to <action>: <error>`.
 fn failed(action: &str) -> impl FnOnce(anyhow::Error) -> String + '_ {

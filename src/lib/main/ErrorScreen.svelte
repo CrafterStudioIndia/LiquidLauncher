@@ -3,9 +3,7 @@
     import TitleBar from "../common/TitleBar.svelte";
     import Logo from "../common/Logo.svelte";
     import ButtonClose from "../common/ButtonClose.svelte";
-    import { openUrl } from "@tauri-apps/plugin-opener";
     import ButtonCopyClipboard from "../common/ButtonCopyClipboard.svelte";
-    import ButtonSetting from "../settings/ButtonSetting.svelte";
     
     export let error = {
         message: "Unknown error",
@@ -34,11 +32,6 @@
                 <pre>{error.error}</pre>
             </div>
         {/if}
-
-        <div class="help-buttons">
-            <ButtonSetting text="Quick Help" color="#4677ff" on:click={() => openUrl('https://liquidbounce.net/docs/Tutorials/Fixing%20LiquidLauncher')}></ButtonSetting>
-            <ButtonSetting text="Contact Support" color="#45a049" on:click={() => openUrl('https://ccbluex.net/contact')}></ButtonSetting>
-        </div>
     </div>
 </VerticalFlexWrapper>
 
@@ -95,11 +88,5 @@
     .error-details pre {
         white-space: pre-wrap;
         word-break: break-all;
-    }
-
-    .help-buttons {
-        display: flex;
-        gap: 1rem;
-        margin-top: 1rem;
     }
 </style>

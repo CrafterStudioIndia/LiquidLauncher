@@ -3,23 +3,20 @@
     import SettingsContainer from "../settings/SettingsContainer.svelte";
     import Description from "../settings/Description.svelte";
     import ButtonSetting from "../settings/ButtonSetting.svelte";
-    import {openUrl} from "@tauri-apps/plugin-opener";
 
     const dispatch = createEventDispatcher();
 </script>
 
 <SettingsContainer
-        title="Welcome to LiquidBounce!"
+        title="Ready to play"
         on:hideSettings={() => dispatch('hide')}
 >
     <Description
-            description="During the first launch or when a new update of LiquidBounce is available, a download window will show up. This is our way of generating advertising revenue for the client. If you do not want to see advertisements, you can purchase LiquidBounce Premium. You might also want to check out the quick start guide for tips on how to use LiquidBounce."
+            description="The first launch downloads Minecraft 1.21.11, the Fabric loader and Fabric API from Mojang's, Fabric's and Modrinth's own servers. LiquidBounce itself is the jar bundled with this launcher; no update or build server is contacted."
     />
 
-    <ButtonSetting
-            text="Quick Start Guide"
-            on:click={() => openUrl("https://liquidbounce.net/docs/get-started")}
-            color="#B83529"
+    <Description
+            description="Everything is kept in the data folder you choose in the settings, so you can launch again without a connection once the files are downloaded."
     />
 
     <ButtonSetting

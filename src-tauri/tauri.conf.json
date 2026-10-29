@@ -9,7 +9,10 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "withGlobalTauri": true,
+    "withGlobalTauri": false,
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' https://api.modrinth.com https://meta.fabricmc.net https://launchermeta.mojang.com https://piston-meta.mojang.com https://libraries.minecraft.net https://resources.download.minecraft.net https://api.adoptium.net https://api.azul.com https://download.oracle.com https://api.mojang.com https://sessionserver.mojang.com https://textures.minecraft.net https://github.com https://objects.githubusercontent.com https://raw.githubusercontent.com;"
+    },
     "windows": [
       {
         "title": "LiquidLauncher",
@@ -47,12 +50,16 @@
       "icons/icon.ico"
     ],
     "shortDescription": "A custom Minecraft launcher for LiquidBounce",
-    "longDescription": "Installs, updates and starts LiquidBounce, a free and open-source Minecraft hacked client, together with Minecraft, the mod loader, Java and your mods.",
+    "longDescription": "Starts LiquidBounce for Minecraft 1.21.11 with Fabric. The client jar ships with the launcher; Minecraft, the Fabric loader and Java are downloaded from Mojang, Fabric and Adoptium, and mods come from Modrinth.",
     "license": "GPL-3.0",
     "licenseFile": "../LICENSE",
-    "resources": [],
-    "targets": "all",
-    "createUpdaterArtifacts": "v1Compatible",
+    "resources": {
+      "../../liquidbounce-0.37.0-ryoku.jar": "liquidbounce.jar"
+    },
+    "targets": [
+      "appimage",
+      "nsis"
+    ],
     "windows": {
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
@@ -63,7 +70,7 @@
     },
     "linux": {
       "appimage": {
-        "bundleMediaFramework": true
+        "bundleMediaFramework": false
       },
       "deb": {
         "files": {
@@ -77,15 +84,6 @@
       "frameworks": [],
       "providerShortName": null,
       "signingIdentity": null
-    }
-  },
-  "plugins": {
-    "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEU1QkM5MTlDREQ4NkEzNjMKUldSam80YmRuSkc4NVNxS2MzYVZPN1I4a283RkdsS0lPTjVjRWlxQ1JhdzFZUkRtc0c1eEtqSzQK",
-      "endpoints": [
-        "https://github.com/CCBlueX/LiquidLauncher/releases/latest/download/latest.json",
-        "https://api.liquidbounce.net/api/v1/launcher/bin/{{target}}/{{arch}}"
-      ]
     }
   }
 }

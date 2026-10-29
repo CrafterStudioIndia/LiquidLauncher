@@ -22,8 +22,6 @@ use std::sync::{Arc, Mutex};
 use commands::*;
 use tauri::Window;
 
-use crate::app::builds::KeptBuild;
-
 pub type ShareableWindow = Arc<Mutex<Window>>;
 
 pub struct RunnerInstance {
@@ -32,16 +30,19 @@ pub struct RunnerInstance {
 
 pub struct AppState {
     pub runner_instance: Arc<Mutex<Option<RunnerInstance>>>,
-    /// The build that launches, as fetched last.
-    pub build: KeptBuild,
 }
 
 impl AppState {
     pub fn new() -> Self {
         Self {
             runner_instance: Arc::new(Mutex::new(None)),
-            build: Mutex::new(None),
         }
+    }
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -51,32 +52,21 @@ mod commands;
 pub fn gui_main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_wayland_nvidia_quirk::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(AppState::new())
         .invoke_handler(tauri::generate_handler![
-            setup_client,
             check_system,
             sys_memory,
             get_options,
             store_options,
-            request_build,
-            request_build_page,
-            request_mods,
+            get_launch_info,
             run_client,
             login_offline,
-            login_microsoft_device_code,
-            login_microsoft_webview,
-            client_account,
-            client_account_authenticate,
-            client_account_logout,
             logout,
             refresh,
-            fetch_blog_posts,
-            fetch_changelog,
             clear_data,
             default_data_folder_path,
             terminate,
@@ -85,14 +75,22 @@ pub fn gui_main() {
             install_custom_mod,
             delete_custom_mod,
             get_minecraft_installation,
-            check_for_updates,
-            get_marketplace_library,
-            browse_marketplace,
-            get_marketplace_item,
-            install_marketplace_item,
-            remove_marketplace_item,
+            list_instances,
+            create_instance,
+            rename_instance,
+            delete_instance,
+            get_background,
+            choose_background,
+            clear_background,
             modrinth_search,
-            modrinth_install
+            modrinth_install,
+            list_skins,
+            get_active_skin,
+            add_skin,
+            update_skin,
+            set_active_skin,
+            delete_skin,
+            export_skin
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

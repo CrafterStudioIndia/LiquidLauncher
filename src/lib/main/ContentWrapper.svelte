@@ -8,7 +8,7 @@
         border-radius: 12px;
         flex: 1;
         display: grid;
-        grid-template-columns: 250px auto;
+        grid-template-columns: 250px minmax(0, 1fr);
         padding: 25px;
         column-gap: 30px;
         overflow: hidden;

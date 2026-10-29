@@ -23,11 +23,10 @@ use std::{
 };
 
 use crate::app::modrinth::ModrinthMod;
+use crate::minecraft::auth::MinecraftAccount;
 use crate::minecraft::java::DistributionSelection;
 use crate::LAUNCHER_DIRECTORY;
-use crate::{auth::ClientAccount, minecraft::auth::MinecraftAccount};
 use anyhow::Result;
-use rand::distr::{Alphanumeric, SampleString};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 use tracing::info;
@@ -36,12 +35,12 @@ use tracing::info;
 pub(crate) struct Options {
     #[serde(rename = "start")]
     pub start_options: StartOptions,
-    #[serde(rename = "version")]
+    #[serde(rename = "version", default)]
     pub version_options: VersionOptions,
     #[serde(rename = "launcher")]
     pub launcher_options: LauncherOptions,
-    #[serde(rename = "premium")]
-    pub premium_options: PremiumOptions,
+    #[serde(rename = "appearance", default)]
+    pub appearance_options: AppearanceOptions,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -58,6 +57,9 @@ pub(crate) struct StartOptions {
     pub memory: u64,
     #[serde(rename = "installation", default)]
     pub installation: MinecraftInstallationOptions,
+    /// A LiquidBounce jar selected by the user. Empty means the bundled one.
+    #[serde(rename = "clientJar", default)]
+    pub client_jar: String,
 }
 
 #[derive(Clone, Serialize, Deserialize, Default)]
@@ -72,10 +74,8 @@ pub struct MinecraftInstallationOptions {
     pub use_vanilla_shader_packs: bool,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub(crate) struct VersionOptions {
-    #[serde(rename = "buildId", default)]
-    pub build_id: i32,
     #[serde(rename = "options", default)]
     pub options: HashMap<String, BranchOptions>,
 }
@@ -84,22 +84,37 @@ pub(crate) struct VersionOptions {
 pub(crate) struct LauncherOptions {
     #[serde(rename = "firstRun", default)]
     pub first_run: bool,
-    #[serde(rename = "showNightlyBuilds")]
-    pub show_nightly_builds: bool,
-    #[serde(rename = "concurrentDownloads")]
+    #[serde(rename = "concurrentDownloads", default = "default_downloads")]
     pub concurrent_downloads: u32,
-    #[serde(rename = "keepLauncherOpen")]
+    #[serde(rename = "keepLauncherOpen", default)]
     pub keep_launcher_open: bool,
-    #[serde(rename = "sessionToken", default = "random_token")]
-    pub session_token: String,
+    /// The id of the selected instance.
+    #[serde(rename = "instance", default)]
+    pub instance: String,
 }
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct PremiumOptions {
-    #[serde(rename = "account", default, skip_serializing)]
-    pub account: Option<ClientAccount>,
-    #[serde(rename = "skipAdvertisement", default)]
-    pub skip_advertisement: bool,
+#[serde(rename_all = "camelCase")]
+pub(crate) struct AppearanceOptions {
+    /// The tint drawn over the background picture, as `#rrggbb`.
+    #[serde(default = "default_background_color")]
+    pub background_color: String,
+    /// How much of the tint covers the picture, from 0 to 1.
+    #[serde(default = "default_background_opacity")]
+    pub background_opacity: f32,
+    /// Blur radius of the background picture in pixels.
+    #[serde(default)]
+    pub background_blur: f32,
+}
+
+impl Default for AppearanceOptions {
+    fn default() -> Self {
+        Self {
+            background_color: default_background_color(),
+            background_opacity: default_background_opacity(),
+            background_blur: 0.0,
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize, Default)]
@@ -116,12 +131,9 @@ pub(crate) struct BranchOptions {
 impl Options {
     pub async fn load(app_data: &Path) -> Result<Self> {
         let file_content = fs::read(app_data.join("options.json")).await?;
-
-        if let Ok(options) = serde_json::from_slice::<Self>(&file_content) {
-            info!("Successfully loaded options from file");
-            return Ok(options);
-        }
-        Ok(serde_json::from_slice::<Self>(&file_content)?)
+        let options = serde_json::from_slice::<Self>(&file_content)?;
+        info!("Successfully loaded options from file");
+        Ok(options)
     }
 
     pub async fn store(&self, app_data: &Path) -> Result<()> {
@@ -148,17 +160,9 @@ impl Default for StartOptions {
             java_distribution: DistributionSelection::default(),
             custom_data_path: String::new(),
             jvm_args: None,
-            memory: 4096,
+            memory: default_memory(),
             installation: MinecraftInstallationOptions::default(),
-        }
-    }
-}
-
-impl Default for VersionOptions {
-    fn default() -> Self {
-        Self {
-            build_id: -1,
-            options: HashMap::new(),
+            client_jar: String::new(),
         }
     }
 }
@@ -167,19 +171,9 @@ impl Default for LauncherOptions {
     fn default() -> Self {
         Self {
             first_run: true,
-            show_nightly_builds: false,
             keep_launcher_open: false,
-            concurrent_downloads: 10,
-            session_token: random_token()
-        }
-    }
-}
-
-impl Default for PremiumOptions {
-    fn default() -> Self {
-        Self {
-            account: None,
-            skip_advertisement: false,
+            concurrent_downloads: default_downloads(),
+            instance: String::new(),
         }
     }
 }
@@ -190,7 +184,7 @@ impl Default for Options {
             start_options: StartOptions::default(),
             version_options: VersionOptions::default(),
             launcher_options: LauncherOptions::default(),
-            premium_options: PremiumOptions::default(),
+            appearance_options: AppearanceOptions::default(),
         }
     }
 }
@@ -199,6 +193,14 @@ fn default_memory() -> u64 {
     4096
 }
 
-fn random_token() -> String {
-    Alphanumeric.sample_string(&mut rand::rng(), 16)
+fn default_downloads() -> u32 {
+    10
+}
+
+fn default_background_color() -> String {
+    "#0b1020".to_owned()
+}
+
+fn default_background_opacity() -> f32 {
+    0.55
 }

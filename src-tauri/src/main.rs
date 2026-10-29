@@ -34,7 +34,6 @@ use tracing_subscriber::layer::SubscriberExt;
 use utils::ARCHITECTURE;
 
 pub mod app;
-pub mod auth;
 pub mod minecraft;
 
 mod error;

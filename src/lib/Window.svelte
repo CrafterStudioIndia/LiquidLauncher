@@ -1,55 +1,15 @@
 <script>
     import {invoke} from "@tauri-apps/api/core";
-    import {listen} from "@tauri-apps/api/event";
-    import {exit} from "@tauri-apps/plugin-process";
     import {onMount} from "svelte";
     import MainScreen from "./main/MainScreen.svelte";
     import LoginScreen from "./login/LoginScreen.svelte";
     import LoadingScreen from "./main/LoadingScreen.svelte";
     import ErrorScreen from "./main/ErrorScreen.svelte";
-    import NonSecureConnectionScreen from "./main/NonSecureConnectionScreen.svelte";
+    import {applyAppearance, backgroundImage, tint} from "./appearance.js";
 
     let loading = true;
     let error = null;
     let options = null;
-    let client = null;
-
-    // Asks if the user allows non-secure connections
-    let allowNonSecure = false;
-
-    // Set once the launcher starts updating itself, drives the splash progress bar
-    let updateProgress = null;
-
-    async function handleUpdate() {
-        const unlisten = await listen("progress-update", (event) => {
-            const { type, value } = event.payload;
-            updateProgress ??= { value: 0, max: 0, text: "", speed: 0 };
-
-            switch (type) {
-                case "max":
-                    updateProgress.max = value;
-                    break;
-                case "progress":
-                    updateProgress.value = value;
-                    break;
-                case "label":
-                    updateProgress.text = value;
-                    break;
-                case "speed":
-                    updateProgress.speed = value;
-                    break;
-            }
-        });
-
-        try {
-            await invoke("check_for_updates");
-        } catch (e) {
-            console.error("Update process failed:", e);
-        } finally {
-            unlisten();
-            updateProgress = null;
-        }
-    }
 
     async function setupOptions() {
         try {
@@ -76,18 +36,12 @@
         }
     }
 
-    async function setupClient() {
+    async function loadBackground() {
         try {
-            client = await invoke("setup_client", {
-                sessionToken: options.launcher.sessionToken
-            });
-            console.info("API Client has been set up", client);
+            backgroundImage.set(await invoke("get_background"));
         } catch (e) {
-            console.error("Failed to set up API client:", e);
-            error = {
-                message: "Failed to establish connection with LiquidBounce API",
-                error: e
-            };
+            // A background is cosmetic; a broken one must not stop the launcher.
+            console.error("Failed to load the background:", e);
         }
     }
 
@@ -95,7 +49,7 @@
         try {
             await invoke("check_system");
         } catch (e) {
-            // We want to continue allowing the user to use the launcher even 
+            // We want to continue allowing the user to use the launcher even
             // if the system check fails
             alert("Looks like there is a configuration issue with your system.\n\n" + e);
         }
@@ -103,34 +57,42 @@
 
     onMount(async () => {
         await setupOptions();
-        await Promise.all([handleUpdate(), setupClient(), checkSystem()]);
+        if (options) {
+            applyAppearance(options);
+            await loadBackground();
+        }
+        await checkSystem();
         loading = false;
     });
 </script>
 
-<div class="window">
+<div class="window" class:has-background={!!$backgroundImage.dataUrl}>
+    {#if $backgroundImage.dataUrl}
+        <div
+                class="background"
+                style="background-image: url('{$backgroundImage.dataUrl}'); filter: blur({$tint.blur}px);"
+        ></div>
+        <div
+                class="tint"
+                style="background-color: {$tint.color}; opacity: {$tint.opacity};"
+        ></div>
+    {/if}
+
     <div class="drag-area" data-tauri-drag-region></div>
 
-    {#if error}
-        <ErrorScreen {error} />
-    {:else if loading || !client}
-        <LoadingScreen progressState={updateProgress} />
-    {:else if client && !client.is_secure && !allowNonSecure}
-        <NonSecureConnectionScreen
-            on:allowNonSecure={() => {
-                allowNonSecure = true;
-            }}
-            on:cancel={async () => {
-                await exit(0);
-            }}
-        />
-    {:else if options}
-        {#if options.start.account}
-            <MainScreen {client} bind:options bind:error />
-        {:else}
-            <LoginScreen bind:options />
+    <div class="content">
+        {#if error}
+            <ErrorScreen {error} />
+        {:else if loading}
+            <LoadingScreen />
+        {:else if options}
+            {#if options.start.account}
+                <MainScreen bind:options />
+            {:else}
+                <LoginScreen bind:options />
+            {/if}
         {/if}
-    {/if}
+    </div>
 </div>
 
 <style>
@@ -140,6 +102,32 @@
         height: 100vh;
         padding: 32px;
         overflow: hidden;
+        position: relative;
+    }
+
+    /* The tint over the picture already darkens the window. */
+    .window.has-background {
+        background-color: transparent;
+    }
+
+    .background {
+        position: absolute;
+        inset: -40px;
+        background-size: cover;
+        background-position: center;
+        z-index: 0;
+    }
+
+    .tint {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+    }
+
+    .content {
+        position: relative;
+        z-index: 2;
+        height: 100%;
     }
 
     .drag-area {

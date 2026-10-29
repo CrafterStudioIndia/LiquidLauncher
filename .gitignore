@@ -1,7 +1,36 @@
+# Dependencies
 /node_modules/
-/public/build/
-/dist
-/tauri
+/.pnp
+.pnp.js
 
-.DS_Store
+# Production build outputs
+/dist/
+/public/build/
+
+# Tauri & Rust build artifacts
+/src-tauri/target/
+/src-tauri/gen/
+*.AppImage
+*.exe
+*.msi
+*.deb
+*.rpm
+*.dmg
+
+# Bundled jars / test instances
+*.jar
+*.tmp
+
+# Environment and sensitive files
 .env
+.env.local
+.env.*.local
+
+# IDEs & System files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*.log

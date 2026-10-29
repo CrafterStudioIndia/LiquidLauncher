@@ -1,38 +1,73 @@
 # LiquidLauncher
 
-A custom Minecraft launcher for LiquidBounce.
+A local launcher for this build of LiquidBounce on Minecraft 1.21.11 / Fabric.
 
-[![Website](https://img.shields.io/badge/Website-liquidbounce.net-4677FF?style=for-the-badge)](https://liquidbounce.net)
-[![Forum](https://img.shields.io/badge/Forum-forums.ccbluex.net-4677FF?style=for-the-badge)](https://forums.ccbluex.net)
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://liquidbounce.net/discord)
-[![YouTube](https://img.shields.io/badge/YouTube-CCBlueX-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtube.com/CCBlueX)
+This is a stripped-down fork of [CCBlueX/LiquidLauncher](https://github.com/CCBlueX/LiquidLauncher).
+It starts the LiquidBounce jar that ships with it and downloads only what Minecraft needs.
+There is no account service, marketplace, embedded download view, telemetry or self-updater.
 
-## Installation
+## What it does
 
-Download the launcher for Windows, macOS or Linux from [liquidbounce.net](https://liquidbounce.net/download) or the [releases](https://github.com/CCBlueX/LiquidLauncher/releases).
+- **Offline accounts only.** Pick a username (1–16 letters, digits, underscores); the account is
+  stored locally and the UUID is derived the same way Minecraft derives it for offline play.
+- **One supported version:** Minecraft 1.21.11 with the newest stable Fabric loader.
+- **LiquidBounce comes from the AppImage.** `liquidbounce-0.37.0-ryoku.jar` is bundled as a
+  resource, copied into the data folder and started from there. A different jar can be selected in
+  _Settings → General_.
+- **Instances.** Each instance has its own worlds, resource packs, mods and settings in
+  `<data>/gameDir/<id>`. Minecraft, Fabric and Java are shared between instances.
+- **Mods from Modrinth.** Search and install Fabric mods for 1.21.11, add local jars, turn mods on
+  and off, update them, and see which of your files Modrinth knows. Mods live in
+  `<data>/custom_mods/<instance>-1.21.11` and are copied into the instance's `mods` folder at launch.
+- **Cracked skin switcher with 3D preview.** Manage local skin library in _Settings → Skins_
+  like in Modrinth App. Real-time 3D interactive preview with orbit rotation, layer toggling, and
+  Classic (4px) vs. Slim (3px) model support. Import from local PNG files or fetch skins by Minecraft
+  username directly. Active skins automatically sync to LiquidBounce and CustomSkinLoader for offline play.
+- **Appearance.** Choose a background picture in _Settings → Appearance_ and set its tint colour,
+  opacity and blur. The picture is copied into the launcher's config directory, so the original
+  file can be moved or deleted.
+- **Log viewer.** A local log viewer with auto-scroll; logs stay on the machine.
 
-- **Arch Linux:** `liquidlauncher-bin` or `liquidlauncher-appimage` from the AUR
-- **NixOS:** `nix run github:CCBlueX/LiquidLauncher`, or add the flake's `packages.${pkgs.system}.default` to `environment.systemPackages`
+## Where data goes
 
-## Screenshots
+| What | Where |
+| --- | --- |
+| Options, background picture, skin library, version cache | the launcher config dir (`~/.config/liquidlauncher` on Linux) |
+| Minecraft, libraries, assets, runtimes, mod cache, active skins | the data dir (`~/.local/share/liquidlauncher` on Linux) |
+| Instance list | `<data>/instances.json` |
+| Instance game directories | `<data>/gameDir/<id>` |
+| Jars added per instance | `<data>/custom_mods/<id>-1.21.11` |
 
-<table>
-  <tr>
-    <td><img src="gh_assets/screenshot-1.png" alt="Login screen"></td>
-    <td><img src="gh_assets/screenshot-2.png" alt="Home screen"></td>
-  </tr>
-  <tr>
-    <td><img src="gh_assets/screenshot-3.png" alt="Build and mod selection"></td>
-    <td><img src="gh_assets/screenshot-4.png" alt="Settings"></td>
-  </tr>
-  <tr>
-    <td><img src="gh_assets/screenshot-5.png" alt="Client log"></td>
-  </tr>
-</table>
+The data directory can be changed in _Settings → General_.
 
-## Issues
+## Network use
 
-If you notice any bugs or missing features, let us know by opening an [issue](https://github.com/CCBlueX/LiquidLauncher/issues). For support, [contact us](https://ccbluex.net/contact). The imprint is at [ccbluex.net/imprint](https://ccbluex.net/imprint).
+The launcher talks to these hosts, and only these:
+
+- `launchermeta.mojang.com`, `piston-meta.mojang.com`, `libraries.minecraft.net`,
+  `resources.download.minecraft.net` — Minecraft version metadata, libraries and assets
+- `meta.fabricmc.net` — Fabric loader version and profile
+- `api.modrinth.com` — Fabric API and mods you search for or install
+- `api.adoptium.net`, `api.azul.com`, `download.oracle.com` — the Java runtime, only when one has
+  to be downloaded
+
+Nothing is uploaded. There is no CCBlueX build, auth, paste, marketplace or update endpoint left in
+the code.
+
+## Build
+
+The launcher is Tauri 2 + Rust with a Svelte frontend. Building an AppImage needs Rust, bun, and the
+usual WebKitGTK development packages.
+
+```sh
+bun install
+bun run build                      # frontend only
+bun run tauri build --bundles appimage
+```
+
+The bundled client jar is read from `../liquidbounce-0.37.0-ryoku.jar` (see
+`src-tauri/tauri.conf.json` → `bundle.resources`). The AppImage is written to
+`src-tauri/target/release/bundle/appimage/`.
 
 ## License
 
@@ -56,22 +91,6 @@ Do the above and share your source code with everyone; just like we do.
 ## Icons
 
 We use [Clarity Line Icons](https://www.svgrepo.com/collection/clarity-line-icons/) for this project.
-
-## Compile it yourself!
-
-LiquidLauncher is using Tauri and is written in the programming language Rust, so make sure that it is installed properly. Instructions can be found on [Rust's website](https://www.rust-lang.org/learn/get-started). It also requires NodeJS and bun.
-
-```sh
-git clone --recurse-submodules https://github.com/CCBlueX/LiquidLauncher
-cd LiquidLauncher
-bun install && bun run build
-bun run tauri dev    # start the launcher
-bun run tauri build  # or build it
-```
-
-## Contributing
-
-We appreciate contributions. So if you want to support us, feel free to make changes to LiquidLauncher's source code and submit a pull request.
 
 ## Commits
 

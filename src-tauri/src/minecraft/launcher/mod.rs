@@ -32,9 +32,7 @@ use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tracing::*;
 
-use crate::app::client_api::{Client, LaunchManifest};
-use crate::app::marketplace::{self, GameDir};
-use crate::auth::ClientAccount;
+use crate::app::launch::LaunchManifest;
 use crate::error::LauncherError;
 use crate::minecraft::java::{DistributionSelection, JavaRuntime};
 use crate::minecraft::progress::{ProgressReceiver, ProgressUpdate};
@@ -232,11 +230,6 @@ pub async fn launch<D: Send + Sync>(
         &features,
     )?;
 
-    // Launcher Args (-D<name>=<value>)
-    command_arguments.push(format!("-Dnet.ccbluex.liquidbounce.api.url={}", launching_parameter.client.url()));
-    command_arguments.push(format!("-Dnet.ccbluex.liquidbounce.api.secure={}", launching_parameter.client.is_secure()));
-    command_arguments.push(format!("-Dnet.ccbluex.liquidbounce.api.token={}", launching_parameter.client.session_token()));
-
     // Custom Arguments
     command_arguments.extend(launching_parameter.jvm_args.iter().cloned());
 
@@ -303,7 +296,6 @@ pub async fn launch<D: Send + Sync>(
     }
 
     let terminator = launcher_data.terminator;
-    let data_dir = data;
     let data = launcher_data.data;
 
     java_runtime
@@ -317,9 +309,7 @@ pub async fn launch<D: Send + Sync>(
         .await?;
 
     if !launching_parameter.keep_launcher_open {
-        // The launcher quits with the game, before run_client could apply these.
-        marketplace::game_exited(&GameDir::new(data_dir, &manifest.build.branch)).await;
-        // Hide launcher window
+        // The launcher quits with the game.
         exit(0);
     }
 
@@ -339,9 +329,6 @@ pub struct StartParameter {
     pub user_type: String,
     pub keep_launcher_open: bool,
     pub concurrent_downloads: u32,
-    pub client: Client,
-    pub client_account: Option<ClientAccount>,
-    pub skip_advertisement: bool,
     pub vanilla_integration: MinecraftInstallationOptions,
 }
 

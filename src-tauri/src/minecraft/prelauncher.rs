@@ -19,16 +19,12 @@
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, bail, Context, Result};
-use async_zip::base::read::mem::ZipFileReader;
+use anyhow::{Context, Result, bail};
 use tokio::fs;
 use tracing::*;
 
-use crate::app::client_api::{Client, LaunchManifest, LoaderMod, LoaderSubsystem, ModSource};
 use crate::app::gui::ShareableWindow;
-use crate::app::marketplace;
-use crate::app::webview::open_download_page;
-use crate::auth::ClientAccount;
+use crate::app::launch::{LaunchManifest, LoaderMod, LoaderSubsystem, ModSource};
 use crate::error::LauncherError;
 use crate::minecraft::launcher;
 use crate::minecraft::launcher::{LauncherData, StartParameter};
@@ -67,7 +63,6 @@ pub(crate) async fn launch(
         })
         .await?;
 
-    let client = &launching_parameter.client;
     let build = &launch_manifest.build;
     let subsystem = &launch_manifest.subsystem;
 
@@ -77,20 +72,12 @@ pub(crate) async fn launch(
         .map(|x| x.into())
         .unwrap_or_else(|| LAUNCHER_DIRECTORY.data_dir().to_path_buf());
 
-    let retriever_account = if launching_parameter.skip_advertisement {
-        &launching_parameter.client_account
-    } else {
-        &None
-    };
-
     // Copy retrieve and copy mods from manifest
     clear_mods(&data_directory, &launch_manifest).await?;
     retrieve_and_copy_mods(
         &data_directory,
         &launch_manifest,
         &launch_manifest.mods,
-        client,
-        retriever_account,
         &launcher_data,
     )
     .await?;
@@ -98,19 +85,9 @@ pub(crate) async fn launch(
         &data_directory,
         &launch_manifest,
         &additional_mods,
-        client,
-        retriever_account,
         &launcher_data,
     )
     .await?;
-
-    // Add-ons are ordinary Fabric mods and belong in the directory clear_mods just emptied.
-    // A failure here must not stop the game from starting.
-    if let Err(error) =
-        marketplace::stage_addons(client, &data_directory, build, &launcher_data).await
-    {
-        warn!("Failed to stage marketplace add-ons: {:?}", error);
-    }
 
     launcher_data.progress_update(ProgressUpdate::set_label("Loading version profile..."));
     let manifest_url = match subsystem {
@@ -202,17 +179,27 @@ pub(crate) async fn clear_mods(data: &Path, manifest: &LaunchManifest) -> Result
     Ok(())
 }
 
-/// Where the custom mods of a branch and Minecraft version are kept.
+/// Where the custom mods of an instance and Minecraft version are kept.
 pub fn custom_mods_directory(data: &Path, branch: &str, mc_version: &str) -> PathBuf {
     data.join("custom_mods").join(format!("{}-{}", branch, mc_version))
+}
+
+/// Copies a file into the instance's mods folder, preferring a hard link.
+async fn place(source: &Path, destination: &Path, name: &str) -> Result<()> {
+    if fs::hard_link(source, destination).await.is_ok() {
+        return Ok(());
+    }
+
+    fs::copy(source, destination)
+        .await
+        .with_context(|| format!("Failed to copy mod {}", name))?;
+    Ok(())
 }
 
 pub async fn retrieve_and_copy_mods(
     data: &Path,
     manifest: &LaunchManifest,
     mods: &Vec<LoaderMod>,
-    client: &Client,
-    client_account: &Option<ClientAccount>,
     launcher_data: &LauncherData<ShareableWindow>,
 ) -> Result<()> {
     let mod_cache_path = data.join("mod_cache");
@@ -250,30 +237,48 @@ pub async fn retrieve_and_copy_mods(
             continue;
         }
 
-        if let ModSource::Local { file_name } = &current_mod.source {
-            let path = mod_custom_path.join(file_name);
-
-            // Check if local mod exists
-            if !path.exists() {
-                error!("File of local mod {} does not exist", current_mod.name);
-                continue;
-            }
-
-            // Copy the mod.
-            fs::copy(path, mods_path.join(file_name))
-                .await
-                .with_context(|| format!("Failed to copy custom mod {}", current_mod.name))?;
-            launcher_data.progress_update(ProgressUpdate::set_label(format!(
-                "Copied custom mod {}",
-                current_mod.name
-            )));
-            continue;
-        }
+        let safe_mod_name = sanitize_filename::sanitize(&current_mod.name);
+        let safe_mod_name = if safe_mod_name.is_empty() {
+            format!("mod_{}", mod_idx)
+        } else {
+            safe_mod_name
+        };
 
         launcher_data.progress_update(ProgressUpdate::set_label(format!(
-            "Downloading recommended mod {}",
+            "Installing mod {}",
             current_mod.name
         )));
+
+        match &current_mod.source {
+            ModSource::Local { file_name } => {
+                let path = mod_custom_path.join(file_name);
+
+                // Check if local mod exists
+                if !path.exists() {
+                    error!("File of local mod {} does not exist", current_mod.name);
+                    continue;
+                }
+
+                place(&path, &mods_path.join(format!("{}.jar", safe_mod_name)), &current_mod.name)
+                    .await?;
+                continue;
+            }
+            ModSource::Path { path, .. } => {
+                let path = PathBuf::from(path);
+                if !path.exists() {
+                    bail!(
+                        "File of mod {} does not exist: {}",
+                        current_mod.name,
+                        path.display()
+                    );
+                }
+
+                place(&path, &mods_path.join(format!("{}.jar", safe_mod_name)), &current_mod.name)
+                    .await?;
+                continue;
+            }
+            ModSource::Repository { .. } => {}
+        }
 
         let current_mod_path = mod_cache_path.join(current_mod.source.get_path()?);
 
@@ -282,134 +287,46 @@ pub async fn retrieve_and_copy_mods(
             // Make sure that the parent directory exists
             fs::create_dir_all(&current_mod_path.parent().unwrap()).await?;
 
-            let contents = match &current_mod.source {
-                ModSource::SkipAd {
-                    artifact_name: _,
-                    url,
-                    extract,
-                } => {
-                    launcher_data.log(&format!(
-                        "Opening download page for mod {} on {}",
-                        current_mod.name, url
-                    ));
-                    launcher_data.progress_update(ProgressUpdate::set_label(format!(
-                        "Opening download page for mod {}",
-                        current_mod.name
-                    )));
-
-                    let pid = match client_account {
-                        Some(account) => {
-                            // PID is taken from the URL which is the last part of the URL
-                            // https://dl.liquidbounce.net/skip/c7kMT2q00U -> c7kMT2q00U
-                            let pid = url.split('/').last().context("Failed to get PID")?;
-                            let skip_file_resolve =
-                                client.resolve_skip_file(account, pid).await?;
-                            
-                            // If the skip file resolve has a target PID, use it - 
-                            // if not, it means that the account is not allowed for direct downloads
-                            skip_file_resolve.target_pid.ok_or_else(|| {
-                                anyhow!("Failed to get direct URL for mod {}", current_mod.name)
-                            })?
-                        }
-                        None => open_download_page(url, launcher_data).await?,
-                    };
-                    
-                    // Download the mod
-                    let url = client.get_direct_download_link(&pid);
-                    launcher_data.log(&format!(
-                        "Downloading mod {} from {}",
-                        current_mod.name, url
-                    ));
-                    launcher_data.progress_update(ProgressUpdate::set_label(format!(
-                        "Downloading mod {}",
-                        current_mod.name
-                    )));
-                    
-                    let retrieved_bytes = download_file(&url, |a, b| {
-                        launcher_data.progress_update(ProgressUpdate::set_for_step(
-                            ProgressUpdateSteps::DownloadLiquidBounceMods,
-                            get_progress(mod_idx, a, b),
-                            max,
-                        ))
-                    })
-                    .await?;
-
-                    // Extract bytes
-                    if *extract {
-                        let reader = ZipFileReader::new(retrieved_bytes).await?;
-
-                        // Find .JAR file in archive and get index of it
-                        let index_of_file_to_extract = reader
-                            .file()
-                            .entries()
-                            .iter()
-                            .position(|x| {
-                                x.filename()
-                                    .as_str()
-                                    .is_ok_and(|name| name.ends_with(".jar"))
-                            })
-                            .ok_or_else(|| {
-                                LauncherError::InvalidVersionProfile(
-                                    "There is no JAR in the downloaded archive".to_string(),
-                                )
-                            })?;
-                        let entry = &reader.file().entries()[index_of_file_to_extract];
-
-                        // Read file to extract
-                        let mut output = Vec::with_capacity(entry.uncompressed_size() as usize);
-                        reader
-                            .reader_with_entry(index_of_file_to_extract)
-                            .await?
-                            .read_to_end_checked(&mut output)
-                            .await?;
-
-                        output
-                    } else {
-                        retrieved_bytes
-                    }
-                }
-                ModSource::Repository {
-                    repository,
-                    artifact,
-                } => {
-                    launcher_data.log(&format!("Downloading mod {} from {}", artifact, repository));
-                    let repository_url =
-                        manifest.repositories.get(repository).ok_or_else(|| {
-                            LauncherError::InvalidVersionProfile(format!(
-                                "There is no repository specified with the name {}",
-                                repository
-                            ))
-                        })?;
-
-                    let retrieved_bytes = download_file(
-                        &format!("{}{}", repository_url, get_maven_artifact_path(artifact)?),
-                        |a, b| {
-                            launcher_data.progress_update(ProgressUpdate::set_for_step(
-                                ProgressUpdateSteps::DownloadLiquidBounceMods,
-                                get_progress(mod_idx, a, b),
-                                max,
-                            ));
-                        },
-                    )
-                    .await?;
-
-                    retrieved_bytes
-                }
-                _ => bail!("unsupported mod source: {:?}", current_mod.source),
+            let ModSource::Repository {
+                repository,
+                artifact,
+            } = &current_mod.source
+            else {
+                unreachable!()
             };
 
-            fs::write(&current_mod_path, contents)
+            launcher_data.log(&format!("Downloading mod {} from {}", artifact, repository));
+            let repository_url = manifest.repositories.get(repository).ok_or_else(|| {
+                LauncherError::InvalidVersionProfile(format!(
+                    "There is no repository specified with the name {}",
+                    repository
+                ))
+            })?;
+
+            let retrieved_bytes = download_file(
+                &format!("{}{}", repository_url, get_maven_artifact_path(artifact)?),
+                |a, b| {
+                    launcher_data.progress_update(ProgressUpdate::set_for_step(
+                        ProgressUpdateSteps::DownloadLiquidBounceMods,
+                        get_progress(mod_idx, a, b),
+                        max,
+                    ));
+                },
+            )
+            .await?;
+
+            fs::write(&current_mod_path, retrieved_bytes)
                 .await
                 .with_context(|| format!("Failed to write mod {}", current_mod.name))?;
         }
 
         // Copy the mod.
-        fs::copy(
+        place(
             &current_mod_path,
-            mods_path.join(format!("{}.jar", current_mod.name)),
+            &mods_path.join(format!("{}.jar", safe_mod_name)),
+            &current_mod.name,
         )
-        .await
-        .with_context(|| format!("Failed to copy mod {}", current_mod.name))?;
+        .await?;
     }
 
     Ok(())

@@ -4,16 +4,10 @@ use anyhow::{bail, Context, Result};
 use tokio::fs;
 
 const HOSTS_PATH: &str = "Windows\\System32\\drivers\\etc\\hosts";
-const HOSTS: [&str; 4] = [
-    "mojang.com",
-    "minecraft.net",
-    "liquidbounce.net",
-    "ccbluex.net",
-];
+const HOSTS: [&str; 2] = ["mojang.com", "minecraft.net"];
 
-/// We have noticed many user have modified the hosts file to block the Minecraft authentication server.
-/// This is likely by using a third-party program. Because LiquidLauncher requires access to the authentication server, we have to modify the hosts file to allow access.
-/// we need to check the hosts file and alert the user if it has been modified.
+/// Many users have modified their hosts file to block Mojang, usually through a third-party program.
+/// The launcher needs Mojang's servers to download the game, so tell them what blocks it.
 pub async fn check_hosts_file() -> Result<()> {
     // Get location of Windows hosts file dynamically
     // "SystemDrive" env, if not assigned default to C:
@@ -55,9 +49,9 @@ pub async fn check_hosts_file() -> Result<()> {
 
     if !flagged_entries.is_empty() {
         bail!(
-            "The hosts file has been modified to block the Minecraft authentication server.\n\
+            "The hosts file has been modified to block Mojang's servers.\n\
             \n\
-            Please remove the following entries from the hosts file:\n\
+            The launcher cannot download Minecraft while these entries exist:\n\
             {}\n\n\
             The file is located at:\n\
             {}",
