@@ -135,6 +135,44 @@ async fn read_library() -> Result<SkinLibraryFile> {
         write_library(&file).await?;
     }
 
+    // Auto-discover any .png files in the skins folder that aren't indexed yet
+    let mut updated = false;
+    if let Ok(mut read_dir) = fs::read_dir(&dir).await {
+        while let Ok(Some(entry)) = read_dir.next_entry().await {
+            let entry_path = entry.path();
+            if entry_path.is_file() {
+                if let Some(ext) = entry_path.extension() {
+                    if ext.eq_ignore_ascii_case("png") {
+                        if let Some(file_name) = entry_path.file_name().and_then(|n| n.to_str()) {
+                            if !file.skins.iter().any(|s| s.file_name.eq_ignore_ascii_case(file_name)) {
+                                if let Ok(bytes) = fs::read(&entry_path).await {
+                                    if check_skin_png(&bytes).is_ok() {
+                                        let base_name = entry_path.file_stem().and_then(|n| n.to_str()).unwrap_or(file_name);
+                                        let name = base_name.replace('_', " ").replace('-', " ");
+                                        let id = base_name.to_lowercase().replace(' ', "-");
+                                        file.skins.push(StoredSkin {
+                                            id,
+                                            name,
+                                            model: "classic".to_string(),
+                                            active: false,
+                                            file_name: file_name.to_string(),
+                                            created_at: Utc::now(),
+                                            data_url: None,
+                                        });
+                                        updated = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if updated {
+        let _ = write_library(&file).await;
+    }
+
     Ok(file)
 }
 
@@ -275,7 +313,7 @@ pub async fn add_skin_bytes(
     Ok(new_skin)
 }
 
-/// Fetches skin from a Mojang player profile.
+/// Fetches skin from a Mojang player profile or fallback skin providers.
 pub async fn add_from_mojang(
     name: &str,
     model_override: Option<&str>,
@@ -291,107 +329,114 @@ pub async fn add_from_mojang(
         bail!("Invalid Minecraft username. Must be 1-16 alphanumeric characters or underscores.");
     }
 
-    // Step 1: Query Mojang profile UUID
-    let profile_url = format!("https://api.mojang.com/users/profiles/minecraft/{username}");
-    let profile_res = HTTP_CLIENT
-        .get(&profile_url)
-        .send()
-        .await
-        .context("Failed to connect to Mojang API")?;
-
-    if profile_res.status() == reqwest::StatusCode::NOT_FOUND
-        || profile_res.status() == reqwest::StatusCode::NO_CONTENT
-    {
-        bail!("Minecraft player '{}' does not exist.", username);
-    }
-    let profile_json: Value = profile_res
-        .error_for_status()?
-        .json()
-        .await
-        .context("Failed to parse Mojang profile response")?;
-
-    let uuid = profile_json
-        .get("id")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow::anyhow!("Mojang profile missing player UUID"))?;
-
-    // Step 2: Query Mojang Session Server
-    let session_url = format!("https://sessionserver.mojang.com/session/minecraft/profile/{uuid}");
-    let session_json: Value = HTTP_CLIENT
-        .get(&session_url)
-        .send()
-        .await
-        .context("Failed to connect to Mojang session server")?
-        .error_for_status()?
-        .json()
-        .await
-        .context("Failed to parse Mojang session profile")?;
-
-    let properties = session_json
-        .get("properties")
-        .and_then(Value::as_array)
-        .ok_or_else(|| anyhow::anyhow!("Player profile contains no properties"))?;
-
-    let texture_prop = properties
-        .iter()
-        .find(|p| p.get("name").and_then(Value::as_str) == Some("textures"))
-        .ok_or_else(|| anyhow::anyhow!("Player profile has no textures"))?;
-
-    let texture_b64 = texture_prop
-        .get("value")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow::anyhow!("Textures property value is missing"))?;
-
-    let texture_bytes = STANDARD
-        .decode(texture_b64)
-        .context("Failed to decode texture base64")?;
-    let texture_json: Value =
-        serde_json::from_slice(&texture_bytes).context("Failed to parse texture JSON")?;
-
-    let skin_obj = texture_json
-        .pointer("/textures/SKIN")
-        .ok_or_else(|| anyhow::anyhow!("Player '{}' has no custom skin set.", username))?;
-
-    let skin_url = skin_obj
-        .get("url")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow::anyhow!("Skin texture URL is missing"))?;
-
-    // Detect model: "slim" or "classic"
-    let detected_model = if skin_obj
-        .pointer("/metadata/model")
-        .and_then(Value::as_str)
-        == Some("slim")
-    {
-        "slim"
-    } else {
-        "classic"
-    };
-
-    let final_model = model_override.unwrap_or(detected_model);
-
-    // Reject any Chinese skin host
-    if crate::utils::is_blocked_china_host(skin_url) {
-        bail!("Blocked connection to Chinese skin host: {skin_url}");
-    }
-
-    // Download skin image
-    let skin_bytes = HTTP_CLIENT
-        .get(skin_url)
-        .send()
-        .await
-        .context("Failed to download skin texture image")?
-        .error_for_status()?
-        .bytes()
-        .await?
-        .to_vec();
-
     let display_name = if name.trim().is_empty() {
         username
     } else {
         name.trim()
     };
 
+    let mut fetched_bytes: Option<Vec<u8>> = None;
+    let mut detected_model = "classic";
+
+    // Fast HTTP client with 6s timeout so requests never stall
+    let fast_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(6))
+        .user_agent(crate::APP_USER_AGENT)
+        .build()
+        .unwrap_or_else(|_| HTTP_CLIENT.clone());
+
+    // Strategy 1: Minotar direct skin endpoint (fastest, high availability)
+    let minotar_url = format!("https://minotar.net/skin/{username}");
+    if let Ok(res) = fast_client.get(&minotar_url).send().await {
+        if res.status().is_success() {
+            if let Ok(bytes) = res.bytes().await {
+                let vec = bytes.to_vec();
+                if check_skin_png(&vec).is_ok() {
+                    fetched_bytes = Some(vec);
+                }
+            }
+        }
+    }
+
+    // Strategy 2: Official Mojang Session API (if Minotar didn't return or for official skins)
+    if fetched_bytes.is_none() {
+        let profile_url = format!("https://api.mojang.com/users/profiles/minecraft/{username}");
+        if let Ok(profile_res) = fast_client.get(&profile_url).send().await {
+            if profile_res.status().is_success() {
+                if let Ok(profile_json) = profile_res.json::<Value>().await {
+                    if let Some(uuid) = profile_json.get("id").and_then(Value::as_str) {
+                        let session_url = format!("https://sessionserver.mojang.com/session/minecraft/profile/{uuid}");
+                        if let Ok(session_res) = fast_client.get(&session_url).send().await {
+                            if session_res.status().is_success() {
+                                if let Ok(session_json) = session_res.json::<Value>().await {
+                                    if let Some(props) = session_json.get("properties").and_then(Value::as_array) {
+                                        if let Some(prop) = props.iter().find(|p| p.get("name").and_then(Value::as_str) == Some("textures")) {
+                                            if let Some(b64) = prop.get("value").and_then(Value::as_str) {
+                                                if let Ok(raw_json) = STANDARD.decode(b64) {
+                                                    if let Ok(tex) = serde_json::from_slice::<Value>(&raw_json) {
+                                                        if let Some(skin_obj) = tex.pointer("/textures/SKIN") {
+                                                            if let Some(model_str) = skin_obj.pointer("/metadata/model").and_then(Value::as_str) {
+                                                                if model_str == "slim" {
+                                                                    detected_model = "slim";
+                                                                }
+                                                            }
+                                                            if let Some(skin_url) = skin_obj.get("url").and_then(Value::as_str) {
+                                                                if !crate::utils::is_blocked_china_host(skin_url) {
+                                                                    if let Ok(skin_res) = fast_client.get(skin_url).send().await {
+                                                                        if skin_res.status().is_success() {
+                                                                            if let Ok(b) = skin_res.bytes().await {
+                                                                                let vec = b.to_vec();
+                                                                                if check_skin_png(&vec).is_ok() {
+                                                                                    fetched_bytes = Some(vec);
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Strategy 3: Check local files for {username}.png
+    if fetched_bytes.is_none() {
+        let local_path = skins_dir().join(format!("{username}.png"));
+        if local_path.is_file() {
+            if let Ok(b) = fs::read(&local_path).await {
+                if check_skin_png(&b).is_ok() {
+                    fetched_bytes = Some(b);
+                }
+            }
+        }
+    }
+
+    // Strategy 4: Fallback to deterministic offline Steve/Alex skin if not found anywhere
+    let skin_bytes = match fetched_bytes {
+        Some(b) => b,
+        None => {
+            let hash: u32 = username.bytes().fold(0u32, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u32));
+            if hash % 2 == 1 {
+                detected_model = "slim";
+                STANDARD.decode(ALEX_PNG_BASE64).context("Failed to decode Alex fallback")?
+            } else {
+                detected_model = "classic";
+                STANDARD.decode(STEVE_PNG_BASE64).context("Failed to decode Steve fallback")?
+            }
+        }
+    };
+
+    let final_model = model_override.unwrap_or(detected_model);
     add_skin_bytes(display_name, final_model, skin_bytes, set_active, data_dir).await
 }
 

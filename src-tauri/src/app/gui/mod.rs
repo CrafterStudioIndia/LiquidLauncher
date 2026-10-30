@@ -70,6 +70,7 @@ pub fn gui_main() {
             clear_data,
             default_data_folder_path,
             terminate,
+            check_jar_release_update,
             get_launcher_version,
             get_custom_mods,
             install_custom_mod,

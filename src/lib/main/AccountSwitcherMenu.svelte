@@ -6,6 +6,7 @@
 
     export let options;
     export let open = false;
+    export let inline = false;
 
     const dispatch = createEventDispatcher();
 
@@ -52,17 +53,41 @@
     async function switchAccount(acc) {
         try {
             options.start.account = acc;
-            // update accounts array in options
             let list = options.start.accounts || [];
             if (!list.some(a => a.name?.toLowerCase() === acc.name?.toLowerCase())) {
                 list = [acc, ...list];
                 options.start.accounts = list;
             }
             await options.store();
+            options = options;
             open = false;
             dispatch("accountSwitched", acc);
         } catch (e) {
             console.error("Failed to switch account:", e);
+        }
+    }
+
+    async function removeAccount(accName, e) {
+        if (e) e.stopPropagation();
+        try {
+            let list = (options?.start?.accounts || []).filter(a => a.name?.toLowerCase() !== accName.toLowerCase());
+            options.start.accounts = list;
+            if (currentUsername.toLowerCase() === accName.toLowerCase()) {
+                if (list.length > 0) {
+                    options.start.account = list[0];
+                } else {
+                    options.start.account = null;
+                }
+            }
+            await options.store();
+            options = options;
+            if (options.start.account) {
+                dispatch("accountSwitched", options.start.account);
+            } else {
+                dispatch("accountSignedOut");
+            }
+        } catch (err) {
+            console.error("Failed to remove account:", err);
         }
     }
 
@@ -79,6 +104,7 @@
             }
             options.start.account = created;
             await options.store();
+            options = options;
             newUsername = "";
             showAddModal = false;
             open = false;
@@ -97,12 +123,12 @@
         try {
             const created = await invoke("login_offline", {username: changeUsername.trim()});
             let list = options.start.accounts || [];
-            // Remove previous username if found
             list = list.filter(a => a.name?.toLowerCase() !== currentUsername.toLowerCase());
             list = [created, ...list];
             options.start.accounts = list;
             options.start.account = created;
             await options.store();
+            options = options;
             changeUsername = "";
             showChangeModal = false;
             open = false;
@@ -119,6 +145,7 @@
             await invoke("logout");
             options.start.account = null;
             await options.store();
+            options = options;
             open = false;
             dispatch("accountSignedOut");
         } catch (e) {
@@ -132,13 +159,13 @@
 </script>
 
 <svelte:window on:click={(e) => {
-    if (open && !e.target.closest('.account-dropdown-wrapper')) {
+    if (!inline && open && !e.target.closest('.account-dropdown-wrapper')) {
         open = false;
     }
 }} />
 
-{#if open}
-    <div class="account-menu" role="menu" tabindex="-1">
+{#if open || inline}
+    <div class="account-menu" class:inline={inline} role="menu" tabindex="-1">
         <!-- Accounts List Header & Items -->
         <div class="accounts-list">
             {#each accountsList as acc (acc.name)}
@@ -162,6 +189,15 @@
                         <svg class="check-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
                             <polyline points="20 6 9 17 4 12"/>
                         </svg>
+                    {:else}
+                        <button
+                            type="button"
+                            class="delete-acc-btn"
+                            title="Remove account {acc.name}"
+                            on:click={(e) => removeAccount(acc.name, e)}
+                        >
+                            &times;
+                        </button>
                     {/if}
                 </div>
             {/each}
@@ -264,6 +300,17 @@
         user-select: none;
     }
 
+    .account-menu.inline {
+        position: relative;
+        top: 0;
+        right: 0;
+        margin-top: 0;
+        width: 100%;
+        max-width: 100%;
+        box-shadow: none;
+        animation: none;
+    }
+
     @keyframes fadeIn {
         from { opacity: 0; transform: translateY(-4px); }
         to { opacity: 1; transform: translateY(0); }
@@ -329,6 +376,25 @@
 
     .check-icon {
         color: #ffffff;
+    }
+
+    .delete-acc-btn {
+        background: transparent;
+        border: none;
+        color: #6b7280;
+        font-size: 16px;
+        line-height: 1;
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 4px;
+        opacity: 0.6;
+        transition: all 0.15s ease;
+    }
+
+    .delete-acc-btn:hover {
+        color: #ef4444;
+        background: rgba(239, 68, 68, 0.15);
+        opacity: 1;
     }
 
     .divider {

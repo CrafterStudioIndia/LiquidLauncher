@@ -35,6 +35,7 @@
 
     // Drag-and-drop state
     let isDraggingOver = false;
+    let fileInputRef;
 
     // Edit Skin Modal state
     let showEditModal = false;
@@ -48,34 +49,75 @@
     $: playerName = options?.start?.account?.name || options?.auth?.name || "Crafter_Studio";
 
     async function loadSkins() {
-        loading = true;
         errorMessage = null;
         try {
             skins = await invoke("list_skins", { options });
             if (skins.length > 0) {
                 const active = skins.find((s) => s.active) || skins[0];
-                selectedSkin = active;
-                activeSkin.set(active);
-            }
-
-            // Generate full-body renders for all saved skins
-            for (const s of skins) {
-                if (s.dataUrl) {
-                    bodyRenderMap[s.id] = await getSkinFullBodyDataUrl(s.dataUrl, s.model, 140, 180);
+                if (!selectedSkin || !skins.some(s => s.id === selectedSkin.id)) {
+                    selectedSkin = active;
+                } else {
+                    selectedSkin = skins.find(s => s.id === selectedSkin.id) || active;
                 }
-            }
-
-            // Generate full-body renders for default skins
-            for (const def of DEFAULT_MINECRAFT_SKINS) {
-                if (!defaultRenderMap[def.id]) {
-                    defaultRenderMap[def.id] = await getSkinFullBodyDataUrl(def.path, def.model, 140, 180);
-                }
+                activeSkin.set(selectedSkin);
             }
         } catch (err) {
             console.error("Failed to load skins:", err);
             errorMessage = err.toString();
         } finally {
             loading = false;
+        }
+
+        // Render thumbnails asynchronously in background without freezing UI
+        setTimeout(async () => {
+            for (const s of skins) {
+                const key = `${s.id}:${s.model}`;
+                if (!bodyRenderMap[key] && s.dataUrl) {
+                    bodyRenderMap[key] = await getSkinFullBodyDataUrl(s.dataUrl, s.model, 140, 180);
+                    bodyRenderMap = bodyRenderMap;
+                }
+            }
+            for (const def of DEFAULT_MINECRAFT_SKINS) {
+                const key = `${def.id}:${def.model}`;
+                if (!defaultRenderMap[key]) {
+                    defaultRenderMap[key] = await getSkinFullBodyDataUrl(def.path, def.model, 140, 180);
+                    defaultRenderMap = defaultRenderMap;
+                }
+            }
+        }, 16);
+    }
+
+    async function handleToggleModel(newModel) {
+        if (!selectedSkin || selectedSkin.model === newModel) return;
+        actionLoading = true;
+        try {
+            const updated = await invoke("update_skin", {
+                options,
+                id: selectedSkin.id,
+                name: selectedSkin.name,
+                model: newModel,
+            });
+            selectedSkin.model = newModel;
+            selectedSkin = selectedSkin;
+            const idx = skins.findIndex((s) => s.id === updated.id);
+            if (idx !== -1) {
+                skins[idx] = updated;
+                skins = skins;
+            }
+            activeSkin.set(selectedSkin);
+            dispatch("skinChanged", selectedSkin);
+
+            // Update thumbnail for new model
+            const key = `${selectedSkin.id}:${newModel}`;
+            if (selectedSkin.dataUrl) {
+                bodyRenderMap[key] = await getSkinFullBodyDataUrl(selectedSkin.dataUrl, newModel, 140, 180);
+                bodyRenderMap = bodyRenderMap;
+            }
+        } catch (err) {
+            console.error("Failed to toggle model:", err);
+            errorMessage = err.toString();
+        } finally {
+            actionLoading = false;
         }
     }
 
@@ -196,13 +238,53 @@
                 selectedSkin = skins.find((s) => s.id === created.id) || created;
                 activeSkin.set(selectedSkin);
                 dispatch("skinChanged", selectedSkin);
+                return;
             }
         } catch (err) {
-            console.error("File selection error:", err);
-            errorMessage = err.toString();
+            console.warn("dialogOpen error, falling back to file input:", err);
         } finally {
             actionLoading = false;
         }
+
+        // Native dialog returned nothing or threw; trigger hidden file input fallback
+        if (fileInputRef) {
+            fileInputRef.click();
+        }
+    }
+
+    async function handleFileInputChange(e) {
+        const files = e.target?.files;
+        if (!files || files.length === 0) return;
+        const file = files[0];
+        const filename = file.name.replace(/\.png$/i, "");
+        const skinName = filename.charAt(0).toUpperCase() + filename.slice(1);
+
+        const reader = new FileReader();
+        actionLoading = true;
+        reader.onloadend = async () => {
+            try {
+                const base64Data = reader.result;
+                const created = await invoke("add_skin", {
+                    options,
+                    name: skinName,
+                    model: "classic",
+                    sourceType: "base64",
+                    source: base64Data,
+                    setActive: true,
+                });
+                await loadSkins();
+                selectedSkin = skins.find((s) => s.id === created.id) || created;
+                activeSkin.set(selectedSkin);
+                dispatch("skinChanged", selectedSkin);
+            } catch (err) {
+                console.error("Failed to add skin via file input:", err);
+                errorMessage = err.toString();
+            } finally {
+                actionLoading = false;
+                if (fileInputRef) fileInputRef.value = "";
+            }
+        };
+        reader.readAsDataURL(file);
     }
 
     function handleDragOver(e) {
@@ -367,6 +449,7 @@
                         <SkinPreview3D
                             skinUrl={selectedSkin.dataUrl}
                             model={selectedSkin.model}
+                            on:modelChange={(e) => handleToggleModel(e.detail)}
                         />
                     {:else}
                         <div class="no-preview">
@@ -385,6 +468,31 @@
                         <line x1="3" y1="16" x2="21" y2="16"/>
                     </svg>
                     <span>Drag to rotate</span>
+                </div>
+
+                <!-- Model Switcher (Classic 4px vs Slim 3px) -->
+                <div class="model-toggle-row">
+                    <span class="model-toggle-label">Arm Model:</span>
+                    <div class="model-toggle-buttons">
+                        <button
+                            type="button"
+                            class="model-chip-btn"
+                            class:active={selectedSkin?.model !== "slim"}
+                            disabled={!selectedSkin || actionLoading}
+                            on:click={() => handleToggleModel("classic")}
+                        >
+                            Classic (4px)
+                        </button>
+                        <button
+                            type="button"
+                            class="model-chip-btn"
+                            class:active={selectedSkin?.model === "slim"}
+                            disabled={!selectedSkin || actionLoading}
+                            on:click={() => handleToggleModel("slim")}
+                        >
+                            Slim (3px)
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Edit Skin Button -->
@@ -443,6 +551,14 @@
                     </button>
 
                     {#if savedSkinsOpen}
+                        <input
+                            type="file"
+                            accept="image/png"
+                            bind:this={fileInputRef}
+                            style="display: none"
+                            on:change={handleFileInputChange}
+                        />
+
                         <div class="cards-grid">
                             <!-- Add Skin Card with Drag & Drop -->
                             <div
@@ -491,9 +607,9 @@
 
                                     <!-- Rendered Character Body -->
                                     <div class="skin-canvas-container">
-                                        {#if bodyRenderMap[skin.id]}
+                                        {#if bodyRenderMap[`${skin.id}:${skin.model}`] || bodyRenderMap[skin.id]}
                                             <img
-                                                src={bodyRenderMap[skin.id]}
+                                                src={bodyRenderMap[`${skin.id}:${skin.model}`] || bodyRenderMap[skin.id]}
                                                 alt={skin.name}
                                                 class="skin-body-render"
                                             />
@@ -544,9 +660,9 @@
 
                                     <!-- Rendered Character Body -->
                                     <div class="skin-canvas-container">
-                                        {#if defaultRenderMap[def.id]}
+                                        {#if defaultRenderMap[`${def.id}:${def.model}`] || defaultRenderMap[def.id]}
                                             <img
-                                                src={defaultRenderMap[def.id]}
+                                                src={defaultRenderMap[`${def.id}:${def.model}`] || defaultRenderMap[def.id]}
                                                 alt={def.name}
                                                 class="skin-body-render"
                                             />
@@ -696,10 +812,11 @@
     /* Modrinth 2-Column Layout */
     .modrinth-skin-layout {
         display: grid;
-        grid-template-columns: 290px 1fr;
-        gap: 24px;
+        grid-template-columns: 280px 1fr;
+        gap: 20px;
         height: 100%;
-        min-height: 520px;
+        min-height: 480px;
+        box-sizing: border-box;
     }
 
     /* Left Pane */
@@ -711,6 +828,7 @@
         border-radius: 10px;
         padding: 16px 14px 14px 14px;
         border: 1px solid #23252a;
+        box-sizing: border-box;
     }
 
     .left-header {
@@ -738,7 +856,7 @@
     /* 3D Model Viewport */
     .model-viewport {
         width: 100%;
-        height: 310px;
+        height: 325px;
         position: relative;
         border-radius: 8px;
         overflow: hidden;
@@ -759,6 +877,58 @@
         color: #8b929e;
         font-size: 12px;
         margin: 6px 0 12px 0;
+    }
+
+    .model-toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 10px;
+        padding: 5px 8px;
+        background: rgba(0, 0, 0, 0.25);
+        border: 1px solid #2e313a;
+        border-radius: 6px;
+    }
+
+    .model-toggle-label {
+        font-size: 12px;
+        font-weight: 500;
+        color: #9ca3af;
+    }
+
+    .model-toggle-buttons {
+        display: flex;
+        gap: 4px;
+    }
+
+    .model-chip-btn {
+        background: transparent;
+        border: 1px solid transparent;
+        color: #9ca3af;
+        border-radius: 4px;
+        padding: 4px 10px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+
+    .model-chip-btn:hover:not(:disabled) {
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.08);
+    }
+
+    .model-chip-btn.active {
+        background: #10b981;
+        color: #ffffff;
+        border-color: #059669;
+        box-shadow: 0 1px 4px rgba(16, 185, 129, 0.35);
+    }
+
+    .model-chip-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
     }
 
     .edit-skin-btn {

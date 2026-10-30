@@ -1,10 +1,12 @@
 <script>
-    import { onMount, onDestroy } from "svelte";
+    import { onMount, onDestroy, createEventDispatcher } from "svelte";
 
     export let skinUrl = "";
     export let model = "classic"; // "classic" | "slim"
     export let showOuterLayer = true;
     export let autoRotate = true;
+
+    const dispatch = createEventDispatcher();
 
     let canvas;
     let gl;
@@ -12,11 +14,12 @@
     let texture = null;
 
     let yaw = 0.45;
-    let pitch = 0.15;
-    let distance = 46.0;
+    let pitch = 0.05;
+    let distance = 56.0;
     let isDragging = false;
     let lastMouseX = 0;
     let lastMouseY = 0;
+    let needsRender = true;
 
     let skinImg = null;
     let is64x32 = false;
@@ -53,9 +56,11 @@
             }
 
             vec3 norm = normalize(vNormal);
-            vec3 lightDir = normalize(vec3(0.5, 0.9, 0.6));
-            float diff = max(dot(norm, lightDir), 0.0);
-            float light = 0.65 + 0.35 * diff;
+            vec3 lightDir1 = normalize(vec3(0.5, 0.8, 1.0));
+            vec3 lightDir2 = normalize(vec3(-0.5, 0.3, -0.6));
+            float diff1 = max(dot(norm, lightDir1), 0.0);
+            float diff2 = max(dot(norm, lightDir2), 0.0);
+            float light = 0.70 + 0.22 * diff1 + 0.08 * diff2;
 
             gl_FragColor = vec4(texColor.rgb * light, texColor.a);
         }
@@ -109,7 +114,7 @@
         const tw = 64.0;
         const th = isLegacy ? 32.0 : 64.0;
 
-        function addQuad(p0, p1, p2, p3, norm, u0, v0, u1, v1) {
+        function addQuad(p0, p1, p2, p3, norm, uv0, uv1, uv2, uv3) {
             const baseIdx = vertices.length / 3;
 
             vertices.push(
@@ -123,16 +128,11 @@
                 normals.push(norm[0], norm[1], norm[2]);
             }
 
-            const tu0 = u0 / tw;
-            const tv0 = v0 / th;
-            const tu1 = u1 / tw;
-            const tv1 = v1 / th;
-
             uvs.push(
-                tu0, tv0,
-                tu1, tv0,
-                tu1, tv1,
-                tu0, tv1
+                uv0[0] / tw, uv0[1] / th,
+                uv1[0] / tw, uv1[1] / th,
+                uv2[0] / tw, uv2[1] / th,
+                uv3[0] / tw, uv3[1] / th
             );
 
             indices.push(
@@ -145,42 +145,42 @@
         addQuad(
             [x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0],
             [0, 1, 0],
-            u + d, v, u + d + w, v + d
+            [u + d, v + d], [u + d + w, v + d], [u + d + w, v], [u + d, v]
         );
 
         // Bottom (-Y)
         addQuad(
             [x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1],
             [0, -1, 0],
-            u + d + w, v, u + d + w + w, v + d
+            [u + d + w, v], [u + d + w + w, v], [u + d + w + w, v + d], [u + d + w, v + d]
         );
 
         // Right (+X)
         addQuad(
             [x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1],
             [1, 0, 0],
-            u, v + d, u + d, v + d + h
+            [u, v + d + h], [u + d, v + d + h], [u + d, v + d], [u, v + d]
         );
 
         // Front (+Z)
         addQuad(
             [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1],
             [0, 0, 1],
-            u + d, v + d, u + d + w, v + d + h
+            [u + d, v + d + h], [u + d + w, v + d + h], [u + d + w, v + d], [u + d, v + d]
         );
 
         // Left (-X)
         addQuad(
             [x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0],
             [-1, 0, 0],
-            u + d + w, v + d, u + d + w + d, v + d + h
+            [u + d + w, v + d + h], [u + d + w + d, v + d + h], [u + d + w + d, v + d], [u + d + w, v + d]
         );
 
         // Back (-Z)
         addQuad(
             [x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0],
             [0, 0, -1],
-            u + d + w + d, v + d, u + d + w + d + w, v + d + h
+            [u + d + w + d, v + d + h], [u + d + w + d + w, v + d + h], [u + d + w + d + w, v + d], [u + d + w + d, v + d]
         );
     }
 
@@ -405,6 +405,7 @@
 
         if (autoRotate && !isDragging) {
             yaw += 0.008;
+            needsRender = true;
         }
 
         const width = canvas.clientWidth;
@@ -413,29 +414,41 @@
             canvas.width = width;
             canvas.height = height;
             gl.viewport(0, 0, width, height);
+            needsRender = true;
         }
+
+        if (!needsRender && !isDragging && !autoRotate) {
+            animationFrameId = requestAnimationFrame(render);
+            return;
+        }
+        needsRender = false;
 
         gl.clearColor(0.04, 0.06, 0.09, 0.0);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         gl.enable(gl.DEPTH_TEST);
-        gl.enable(gl.CULL_FACE);
-        gl.cullFace(gl.BACK);
+        gl.depthFunc(gl.LEQUAL);
+        gl.disable(gl.CULL_FACE);
 
         gl.useProgram(programInfo.program);
 
         const proj = new Float32Array(16);
-        mat4Perspective(proj, 45 * Math.PI / 180, width / height, 0.1, 200.0);
+        const fovy = 35 * Math.PI / 180;
+        const aspect = (width && height) ? width / height : 1.0;
+        mat4Perspective(proj, fovy, aspect, 0.5, 500.0);
 
-        // View matrix via yaw/pitch orbit
-        const camX = distance * Math.sin(yaw) * Math.cos(pitch);
-        const camY = distance * Math.sin(pitch);
-        const camZ = distance * Math.cos(yaw) * Math.cos(pitch);
+        // Orbit camera looking at target (0, 0, 0)
+        const cosY = Math.cos(yaw);
+        const sinY = Math.sin(yaw);
+        const cosP = Math.cos(pitch);
+        const sinP = Math.sin(pitch);
+
+        const targetY = 0.0;
 
         const view = new Float32Array([
-            Math.cos(yaw), 0, -Math.sin(yaw), 0,
-            -Math.sin(yaw) * Math.sin(pitch), Math.cos(pitch), -Math.cos(yaw) * Math.sin(pitch), 0,
-            Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch), 0,
-            0, 0, -distance, 1
+            cosY,         -sinP * sinY,                 sinY * cosP,                0,
+            0,             cosP,                        sinP,                       0,
+            -sinY,        -sinP * cosY,                 cosP * cosY,                0,
+            0,            -cosP * targetY,             -sinP * targetY - distance,  1
         ]);
 
         const mvp = new Float32Array(16);
@@ -475,6 +488,7 @@
         isDragging = true;
         lastMouseX = e.clientX;
         lastMouseY = e.clientY;
+        needsRender = true;
     }
 
     function onMouseMove(e) {
@@ -486,29 +500,35 @@
 
         yaw += dx * 0.01;
         pitch = Math.max(-1.4, Math.min(1.4, pitch + dy * 0.01));
+        needsRender = true;
     }
 
     function onMouseUp() {
         isDragging = false;
+        needsRender = true;
     }
 
     function onWheel(e) {
         e.preventDefault();
-        distance = Math.max(20.0, Math.min(80.0, distance + e.deltaY * 0.05));
+        distance = Math.max(35.0, Math.min(100.0, distance + e.deltaY * 0.05));
+        needsRender = true;
     }
 
     export function resetCamera() {
         yaw = 0.45;
-        pitch = 0.15;
-        distance = 46.0;
+        pitch = 0.05;
+        distance = 56.0;
+        needsRender = true;
     }
 
     $: if (gl && model) {
         updateBuffers();
+        needsRender = true;
     }
 
     $: if (gl && showOuterLayer !== undefined) {
         updateBuffers();
+        needsRender = true;
     }
 
     $: if (skinUrl) {
@@ -524,6 +544,13 @@
 
         programInfo = initShaders();
         updateBuffers();
+
+        // Initialize placeholder texture so render() immediately functions
+        if (!texture) {
+            texture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([80, 85, 95, 255]));
+        }
 
         if (skinUrl) {
             loadTexture(skinUrl);
@@ -587,6 +614,19 @@
         >
             <span>{showOuterLayer ? "Layers: All" : "Layers: Base"}</span>
         </button>
+
+        <button
+            type="button"
+            class="control-btn"
+            title="Toggle arm model: Classic (4px) or Slim (3px)"
+            on:click={() => {
+                model = (model === "slim") ? "classic" : "slim";
+                dispatch("modelChange", model);
+                needsRender = true;
+            }}
+        >
+            <span>{model === "slim" ? "Slim (3px)" : "Classic (4px)"}</span>
+        </button>
     </div>
 </div>
 
@@ -595,7 +635,7 @@
         position: relative;
         width: 100%;
         height: 100%;
-        min-height: 380px;
+        min-height: 260px;
         display: flex;
         align-items: center;
         justify-content: center;

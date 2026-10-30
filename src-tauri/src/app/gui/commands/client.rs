@@ -389,3 +389,15 @@ pub(crate) async fn terminate(app_state: tauri::State<'_, AppState>) -> Result<(
     }
     Ok(())
 }
+
+#[tauri::command]
+pub(crate) async fn check_jar_release_update(
+    app: AppHandle,
+    options: Options,
+) -> Result<Option<crate::app::launch::ReleasePromptInfo>, String> {
+    let data = options.start_options.data_directory();
+    let destination = data.join("client").join("liquidbounce.jar");
+    crate::app::launch::check_and_fetch_release_jar(&app, &destination)
+        .await
+        .map_err(|e| e.to_string())
+}

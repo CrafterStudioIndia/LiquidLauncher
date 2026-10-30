@@ -44,10 +44,18 @@
         display: flex;
         flex-direction: column;
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        transition: width 0.2s ease, height 0.2s ease;
     }
 
     .container.fill {
-        height: calc(100% - 100px);
+        width: 920px;
+        max-width: calc(100% - 60px);
+        height: calc(100% - 60px);
+        max-height: calc(100% - 60px);
+    }
+
+    .container.fill .settings {
+        overflow: hidden;
     }
 
     .header {

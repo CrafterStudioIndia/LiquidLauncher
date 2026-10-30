@@ -84,13 +84,41 @@ pub fn custom_mods_dir(data: &Path, id: &str) -> PathBuf {
 }
 
 async fn read(data: &Path) -> Result<InstanceFile> {
-    match fs::read_to_string(file(data)).await {
+    let mut file: InstanceFile = match fs::read_to_string(file(data)).await {
         Ok(raw) => serde_json::from_str(&raw)
-            .with_context(|| format!("Unexpected layout of {}", file(data).display())),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(InstanceFile::default()),
-        Err(error) => Err(error)
+            .with_context(|| format!("Unexpected layout of {}", file(data).display()))?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(InstanceFile::default()),
+        Err(error) => return Err(error)
             .with_context(|| format!("Failed to read {}", file(data).display())),
+    };
+
+    let mut modified = false;
+    for instance in &mut file.instances {
+        if instance.minecraft != SUPPORTED_MC_VERSION {
+            let old_version = instance.minecraft.clone();
+            tracing::info!(
+                "Auto-migrating instance '{}' from old version {} to {}",
+                instance.id,
+                old_version,
+                SUPPORTED_MC_VERSION
+            );
+            instance.minecraft = SUPPORTED_MC_VERSION.to_owned();
+
+            // Migrate custom_mods folder if present
+            let old_mods = data.join("custom_mods").join(format!("{}-{old_version}", instance.id));
+            let new_mods = custom_mods_dir(data, &instance.id);
+            if old_mods.is_dir() && !new_mods.exists() {
+                let _ = fs::rename(&old_mods, &new_mods).await;
+            }
+            modified = true;
+        }
     }
+
+    if modified {
+        let _ = write(data, &file).await;
+    }
+
+    Ok(file)
 }
 
 async fn write(data: &Path, file: &InstanceFile) -> Result<()> {

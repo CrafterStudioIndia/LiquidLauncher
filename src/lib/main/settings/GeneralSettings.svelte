@@ -8,6 +8,7 @@
     import ButtonSetting from "../../settings/ButtonSetting.svelte";
     import Description from "../../settings/Description.svelte";
     import LauncherVersion from "../../settings/LauncherVersion.svelte";
+    import AccountSwitcherMenu from "../AccountSwitcherMenu.svelte";
     import {onMount} from "svelte";
     import {invoke} from "@tauri-apps/api/core";
 
@@ -18,68 +19,6 @@
     let launcherVersion = "";
     let defaultDataFolder = "";
     let systemMemory = options.start.memory;
-
-    let showAddModal = false;
-    let newAccountUsername = "";
-    let addingAccount = false;
-    let addAccountError = null;
-
-    $: accountsList = getAccountsList(options);
-
-    function getAccountsList(opts) {
-        let list = opts?.start?.accounts || [];
-        if (opts?.start?.account) {
-            const hasCurrent = list.some(a => a.name?.toLowerCase() === opts.start.account.name?.toLowerCase());
-            if (!hasCurrent) {
-                list = [opts.start.account, ...list];
-            }
-        }
-        return list;
-    }
-
-    async function switchAccount(acc) {
-        try {
-            options.start.account = acc;
-            await options.store();
-            dispatch("refreshInfo");
-        } catch (error) {
-            console.error("Failed to switch account:", error);
-        }
-    }
-
-    async function handleAddAccount() {
-        if (!newAccountUsername.trim()) return;
-        addingAccount = true;
-        addAccountError = null;
-        try {
-            const created = await invoke("login_offline", {username: newAccountUsername.trim()});
-            let list = options.start.accounts || [];
-            if (!list.some(a => a.name?.toLowerCase() === created.name?.toLowerCase())) {
-                list = [...list, created];
-                options.start.accounts = list;
-            }
-            options.start.account = created;
-            await options.store();
-            newAccountUsername = "";
-            showAddModal = false;
-            dispatch("refreshInfo");
-        } catch (e) {
-            addAccountError = `${e}`;
-        } finally {
-            addingAccount = false;
-        }
-    }
-
-    async function removeAccount(acc) {
-        let list = options.start.accounts || [];
-        list = list.filter(a => a.name?.toLowerCase() !== acc.name?.toLowerCase());
-        options.start.accounts = list;
-        if (options.start.account?.name?.toLowerCase() === acc.name?.toLowerCase()) {
-            options.start.account = list[0] || null;
-        }
-        await options.store();
-        dispatch("refreshInfo");
-    }
 
     async function clearData() {
         try {
@@ -209,280 +148,33 @@
     <ButtonSetting text="Use the bundled jar" color="#5b5b5b" on:click={useBundledJar} />
 {/if}
 
-<div class="account-switcher-section">
-    <div class="section-header">
-        <div class="section-title">Minecraft Accounts</div>
-        <button type="button" class="btn-add-acc" on:click={() => { showAddModal = true; newAccountUsername = ""; addAccountError = null; }}>
-            + Add Account
-        </button>
-    </div>
-
-    <div class="accounts-container">
-        {#each accountsList as acc (acc.name)}
-            {@const isSelected = options.start.account?.name?.toLowerCase() === acc.name.toLowerCase()}
-            <div class="acc-row" class:active={isSelected}>
-                <div class="acc-info" role="button" tabindex="0" on:click={() => switchAccount(acc)} on:keydown={(e) => (e.key === "Enter" || e.key === " ") && switchAccount(acc)}>
-                    <span class="acc-name">{acc.name}</span>
-                    <span class="acc-badge">{isSelected ? "Active" : "Offline"}</span>
-                </div>
-                <div class="acc-actions">
-                    {#if !isSelected}
-                        <button type="button" class="btn-switch" on:click={() => switchAccount(acc)}>Switch</button>
-                    {/if}
-                    <button type="button" class="btn-remove" title="Remove account" on:click={() => removeAccount(acc)}>✕</button>
-                </div>
-            </div>
-        {/each}
-    </div>
+<div class="settings-account-card">
+    <div class="account-card-title">Account</div>
+    <AccountSwitcherMenu
+        bind:options
+        inline={true}
+        on:accountSwitched={() => dispatch("refreshInfo")}
+        on:accountSignedOut={() => dispatch("refreshInfo")}
+    />
 </div>
-
-{#if showAddModal}
-    <div
-        class="modal-backdrop"
-        on:click={(e) => e.target === e.currentTarget && (showAddModal = false)}
-        on:keydown={(e) => e.key === 'Escape' && (showAddModal = false)}
-        role="presentation"
-    >
-        <div class="modal-card" role="dialog" aria-modal="true">
-            <div class="modal-title">Add Offline Account</div>
-            <input
-                type="text"
-                class="modal-input"
-                placeholder="Username (1-16 chars)"
-                maxlength="16"
-                bind:value={newAccountUsername}
-            />
-            {#if addAccountError}
-                <div class="error-text">{addAccountError}</div>
-            {/if}
-            <div class="modal-buttons">
-                <button type="button" class="btn-cancel" on:click={() => showAddModal = false}>Cancel</button>
-                <button type="button" class="btn-confirm" disabled={addingAccount || !newAccountUsername.trim()} on:click={handleAddAccount}>
-                    {addingAccount ? "Adding..." : "Add Account"}
-                </button>
-            </div>
-        </div>
-    </div>
-{/if}
-
-<ButtonSetting
-    text="Sign out of Minecraft Account"
-    on:click={logout}
-    color="#4677FF"
-/>
 
 <ButtonSetting text="Clear Data" on:click={clearData} color="#B83529" />
 
 <LauncherVersion version={launcherVersion} />
 
 <style>
-    .account-switcher-section {
-        background: rgba(0, 0, 0, 0.22);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 8px;
-        padding: 14px;
-        margin: 10px 0;
+    .settings-account-card {
+        margin: 12px 0 16px 0;
         display: flex;
         flex-direction: column;
-        gap: 10px;
-    }
-
-    .section-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .section-title {
-        font-size: 14px;
-        font-weight: 600;
-        color: #ffffff;
-    }
-
-    .btn-add-acc {
-        background: #2563eb;
-        border: none;
-        color: white;
-        padding: 5px 10px;
-        font-size: 12px;
-        border-radius: 5px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: background 0.15s;
-    }
-
-    .btn-add-acc:hover {
-        background: #1d4ed8;
-    }
-
-    .accounts-container {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-    }
-
-    .acc-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        background: rgba(255, 255, 255, 0.04);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 6px;
-        padding: 8px 12px;
-        transition: all 0.15s;
-    }
-
-    .acc-row.active {
-        border-color: #3b82f6;
-        background: rgba(59, 130, 246, 0.12);
-    }
-
-    .acc-info {
-        display: flex;
-        align-items: center;
         gap: 8px;
-        cursor: pointer;
-        flex: 1;
     }
 
-    .acc-name {
+    .account-card-title {
         font-size: 13px;
         font-weight: 600;
-        color: #f3f4f6;
-    }
-
-    .acc-badge {
-        font-size: 11px;
-        color: #9ca3af;
-        background: rgba(0, 0, 0, 0.35);
-        padding: 2px 6px;
-        border-radius: 4px;
-    }
-
-    .acc-row.active .acc-badge {
-        color: #60a5fa;
-        background: rgba(59, 130, 246, 0.2);
-    }
-
-    .acc-actions {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-
-    .btn-switch {
-        background: #374151;
-        border: none;
-        color: #f3f4f6;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 11px;
-        cursor: pointer;
-    }
-
-    .btn-switch:hover {
-        background: #4b5563;
-    }
-
-    .btn-remove {
-        background: transparent;
-        border: none;
-        color: #9ca3af;
-        font-size: 13px;
-        cursor: pointer;
-        padding: 4px;
-    }
-
-    .btn-remove:hover {
-        color: #ef4444;
-    }
-
-    .modal-backdrop {
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.65);
-        backdrop-filter: blur(4px);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 2000;
-    }
-
-    .modal-card {
-        background: #1e2026;
-        border: 1px solid #323642;
-        border-radius: 10px;
-        padding: 22px;
-        width: 320px;
-        display: flex;
-        flex-direction: column;
-        gap: 14px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
-    }
-
-    .modal-title {
-        font-size: 16px;
-        font-weight: 600;
         color: #ffffff;
-    }
-
-    .modal-input {
-        background: #121316;
-        border: 1px solid #2e323b;
-        color: #f3f4f6;
-        padding: 8px 12px;
-        border-radius: 6px;
-        font-size: 13px;
-        outline: none;
-    }
-
-    .modal-input:focus {
-        border-color: #3b82f6;
-    }
-
-    .error-text {
-        font-size: 12px;
-        color: #fca5a5;
-    }
-
-    .modal-buttons {
-        display: flex;
-        justify-content: flex-end;
-        gap: 10px;
-    }
-
-    .btn-cancel {
-        background: transparent;
-        border: 1px solid #373b47;
-        color: #9ca3af;
-        border-radius: 6px;
-        padding: 6px 12px;
-        font-size: 12px;
-        cursor: pointer;
-    }
-
-    .btn-cancel:hover {
-        color: #ffffff;
-        border-color: #4b5563;
-    }
-
-    .btn-confirm {
-        background: #2563eb;
-        border: none;
-        color: #ffffff;
-        border-radius: 6px;
-        padding: 6px 14px;
-        font-size: 12px;
-        font-weight: 600;
-        cursor: pointer;
-    }
-
-    .btn-confirm:hover:not(:disabled) {
-        background: #1d4ed8;
-    }
-
-    .btn-confirm:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
 </style>

@@ -18,10 +18,65 @@
  */
 
 use anyhow::Result;
-use sha1::{Digest, Sha1};
-use std::path::PathBuf;
+use sha1::Sha1;
+use sha2::Sha256;
+use std::fs::File;
+use std::io::{BufReader, Read};
+use std::path::{Path, PathBuf};
 
 pub fn sha1sum(path: &PathBuf) -> Result<String> {
+    use sha1::Digest;
     let hash = Sha1::digest(std::fs::read(path)?);
     Ok(base16ct::lower::encode_string(&hash))
+}
+
+pub fn sha256sum(path: &Path) -> Result<String> {
+    use sha2::Digest;
+    let file = File::open(path)?;
+    let mut reader = BufReader::with_capacity(128 * 1024, file);
+    let mut hasher = Sha256::new();
+    let mut buffer = [0u8; 64 * 1024];
+
+    loop {
+        let count = reader.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        hasher.update(&buffer[..count]);
+    }
+
+    let hash = hasher.finalize();
+    Ok(base16ct::lower::encode_string(&hash))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn test_sha256sum_empty() {
+        let temp = std::env::temp_dir().join("test_sha256_empty.tmp");
+        let mut file = File::create(&temp).unwrap();
+        file.flush().unwrap();
+        drop(file);
+
+        let hash = sha256sum(&temp).unwrap();
+        let _ = std::fs::remove_file(&temp);
+        assert_eq!(hash, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    }
+
+    #[test]
+    fn test_sha256sum_content() {
+        let temp = std::env::temp_dir().join("test_sha256_content.tmp");
+        let mut file = File::create(&temp).unwrap();
+        file.write_all(b"liquidbounce").unwrap();
+        file.flush().unwrap();
+        drop(file);
+
+        let hash = sha256sum(&temp).unwrap();
+        let _ = std::fs::remove_file(&temp);
+        // printf "liquidbounce" | sha256sum -> b065e2e076eb2d4be89c571f37d65d390418b2011b7e06a71433e5779f122835
+        assert_eq!(hash, "b065e2e076eb2d4be89c571f37d65d390418b2011b7e06a71433e5779f122835");
+    }
 }
