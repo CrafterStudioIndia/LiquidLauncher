@@ -370,6 +370,11 @@ pub async fn add_from_mojang(
 
     let final_model = model_override.unwrap_or(detected_model);
 
+    // Reject any Chinese skin host
+    if crate::utils::is_blocked_china_host(skin_url) {
+        bail!("Blocked connection to Chinese skin host: {skin_url}");
+    }
+
     // Download skin image
     let skin_bytes = HTTP_CLIENT
         .get(skin_url)
@@ -569,6 +574,48 @@ pub async fn sync_skin_to_single_instance(
     // Direct skin.png in instance folder
     let _ = fs::write(game_dir.join("skin.png"), skin_bytes).await;
 
+    // Dedicated LiquidBounce Cosmetics Engine skin directory: <gameDir>/skins/
+    let mod_skins_dir = game_dir.join("skins");
+    if fs::create_dir_all(&mod_skins_dir).await.is_ok() {
+        let _ = fs::write(mod_skins_dir.join("active.png"), skin_bytes).await;
+        let _ = fs::write(mod_skins_dir.join("default.png"), skin_bytes).await;
+        let meta = json!({
+            "id": "active",
+            "model": model,
+        });
+        let _ = fs::write(
+            mod_skins_dir.join("active.json"),
+            serde_json::to_vec_pretty(&meta).unwrap_or_default(),
+        )
+        .await;
+        let _ = fs::write(
+            mod_skins_dir.join("default.json"),
+            serde_json::to_vec_pretty(&meta).unwrap_or_default(),
+        )
+        .await;
+
+        // Copy all library skins to instance skins dir
+        if let Ok(library) = read_library().await {
+            let lib_dir = skins_dir();
+            for s in library.skins {
+                let src_skin = lib_dir.join(&s.file_name);
+                if src_skin.is_file() {
+                    let _ = fs::copy(&src_skin, mod_skins_dir.join(&s.file_name)).await;
+                    let s_meta = json!({
+                        "id": s.id,
+                        "name": s.name,
+                        "model": s.model,
+                    });
+                    let _ = fs::write(
+                        mod_skins_dir.join(format!("{}.json", s.id)),
+                        serde_json::to_vec_pretty(&s_meta).unwrap_or_default(),
+                    )
+                    .await;
+                }
+            }
+        }
+    }
+
     // CustomSkinLoader compatibility: <gameDir>/CustomSkinLoader/LocalSkin/skins/
     let csl_dir = game_dir.join("CustomSkinLoader").join("LocalSkin").join("skins");
     if fs::create_dir_all(&csl_dir).await.is_ok() {
@@ -662,6 +709,21 @@ pub async fn sync_for_launch(data_dir: &Path, instance_id: &str, player_name: &s
         let skin_path = skins_dir().join(&active.file_name);
         if let Ok(bytes) = fs::read(&skin_path).await {
             sync_skin_to_single_instance(&active.model, &bytes, &skin_path, data_dir, instance_id).await;
+
+            // Dedicated LiquidBounce Cosmetics Engine player files: <gameDir>/skins/<player_name>.png & .json
+            let mod_skins_dir = instances::game_dir(data_dir, instance_id).join("skins");
+            if fs::create_dir_all(&mod_skins_dir).await.is_ok() {
+                let _ = fs::write(mod_skins_dir.join(format!("{player_name}.png")), &bytes).await;
+                let skin_meta = json!({
+                    "id": player_name,
+                    "model": active.model,
+                });
+                let _ = fs::write(
+                    mod_skins_dir.join(format!("{player_name}.json")),
+                    serde_json::to_vec_pretty(&skin_meta).unwrap_or_default(),
+                )
+                .await;
+            }
 
             // Also write player-specific CustomSkinLoader files: <player_name>.png and <player_name>.json
             let csl_dir = instances::game_dir(data_dir, instance_id)

@@ -33,8 +33,27 @@ pub fn downloaded_bytes() -> u64 {
     DOWNLOADED_BYTES.load(Ordering::Relaxed)
 }
 
+/// Checks if a URL targets a Chinese top-level domain (.cn) or Chinese mirror/host.
+pub fn is_blocked_china_host(url: &str) -> bool {
+    let lower = url.to_lowercase();
+    lower.contains(".cn/")
+        || lower.ends_with(".cn")
+        || lower.contains(".cn:")
+        || lower.contains("loyisa")
+        || lower.contains("aliyuncs")
+        || lower.contains("baidupcs")
+        || lower.contains("163.com")
+        || lower.contains("bilibili")
+        || lower.contains("qq.com")
+        || lower.contains("littleskin")
+        || lower.contains("blessingskin")
+}
+
 /// Download a file using HTTP_CLIENT without any progress tracking
 pub async fn download_file_untracked(url: &str, path: impl AsRef<Path>) -> Result<()> {
+    if is_blocked_china_host(url) {
+        anyhow::bail!("Connections to China (.cn / Chinese hosts) are blocked: {}", url);
+    }
     let path = path.as_ref().to_owned();
     let mut response = HTTP_CLIENT.get(url).send().await?.error_for_status()?;
 
@@ -52,6 +71,9 @@ pub async fn download_file<F>(url: &str, on_progress: F) -> Result<Vec<u8>>
 where
     F: Fn(u64, u64),
 {
+    if is_blocked_china_host(url) {
+        anyhow::bail!("Connections to China (.cn / Chinese hosts) are blocked: {}", url);
+    }
     debug!("Downloading file {:?}", url);
 
     let mut response = (|| async {
