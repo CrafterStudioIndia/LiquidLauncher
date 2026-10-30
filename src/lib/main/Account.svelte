@@ -2,12 +2,15 @@
     import { onMount, createEventDispatcher } from "svelte";
     import { invoke } from "@tauri-apps/api/core";
     import { activeSkin, getSkinHeadDataUrl } from "../skins/skin_utils.js";
+    import AccountSwitcherMenu from "./AccountSwitcherMenu.svelte";
 
     export let username;
     export let accountType;
+    export let options;
 
     const dispatch = createEventDispatcher();
     let avatarUrl = "img/steve.png";
+    let menuOpen = false;
 
     async function updateAvatar(skin) {
         if (skin?.dataUrl) {
@@ -32,40 +35,61 @@
             console.error("Failed to fetch active skin:", e);
         }
     });
+
+    function toggleMenu() {
+        menuOpen = !menuOpen;
+    }
 </script>
 
-<div class="account">
-    <div
-        class="avatar-btn"
-        role="button"
-        tabindex="0"
-        title="Open Skin Switcher"
-        on:click={() => dispatch("showSkins")}
-        on:keydown={(e) => e.key === "Enter" && dispatch("showSkins")}
-    >
-        <img src={avatarUrl} alt="avatar" class="avatar"/>
-        <div class="skin-badge" title="Skin Switcher">
-            <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2a5 5 0 0 0-5 5v1H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-2V7a5 5 0 0 0-5-5zm-3 5a3 3 0 0 1 6 0v1H9V7z"/>
-            </svg>
+<div class="account-dropdown-wrapper">
+    <div class="account">
+        <div
+            class="avatar-btn"
+            role="button"
+            tabindex="0"
+            title="Switch Account"
+            on:click={toggleMenu}
+            on:keydown={(e) => e.key === "Enter" && toggleMenu()}
+        >
+            <img src={avatarUrl} alt="avatar" class="avatar"/>
+            <div class="switch-badge" title="Account Switcher">
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                    <polyline points="6 9 12 15 18 9"/>
+                </svg>
+            </div>
         </div>
+        <div
+            class="details"
+            role="button"
+            tabindex="0"
+            title="Switch Account"
+            on:click={toggleMenu}
+            on:keydown={(e) => e.key === "Enter" && toggleMenu()}
+        >
+            <div class="username-row">
+                <span class="username">{username}</span>
+                <span class="caret">▾</span>
+            </div>
+            <div class="type">{accountType === "Offline" ? "Offline" : accountType} &bull; {$activeSkin?.name || "Skin"}</div>
+        </div>
+        <button class="button-settings" type="button" title="Settings" on:click={() => dispatch("showSettings")} >
+            <img class="icon" src="img/icon/icon-cog.svg" alt="settings">
+        </button>
     </div>
-    <div
-        class="details"
-        role="button"
-        tabindex="0"
-        on:click={() => dispatch("showSkins")}
-        on:keydown={(e) => e.key === "Enter" && dispatch("showSkins")}
-    >
-        <div class="username">{username}</div>
-        <div class="type">{accountType === "Offline" ? "Offline" : accountType} &bull; {$activeSkin?.name || "Skin"}</div>
-    </div>
-    <button class="button-settings" type="button" title="Settings" on:click={() => dispatch("showSettings")} >
-        <img class="icon" src="img/icon/icon-cog.svg" alt="settings">
-    </button>
+
+    <AccountSwitcherMenu
+        bind:options
+        bind:open={menuOpen}
+        on:accountSwitched={(e) => dispatch("accountSwitched", e.detail)}
+        on:accountSignedOut={() => dispatch("accountSignedOut")}
+    />
 </div>
 
 <style>
+    .account-dropdown-wrapper {
+        position: relative;
+    }
+
     .account {
         display: grid;
         grid-template-columns: max-content auto max-content;
@@ -76,6 +100,13 @@
         gap: 8px;
         align-items: center;
         min-width: 200px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        transition: border-color 0.15s ease, background-color 0.15s ease;
+    }
+
+    .account:hover {
+        border-color: rgba(255, 255, 255, 0.18);
+        background-color: rgba(0, 0, 0, .45);
     }
 
     .avatar-btn {
@@ -102,7 +133,7 @@
         border-color: #3b82f6;
     }
 
-    .skin-badge {
+    .switch-badge {
         position: absolute;
         bottom: -2px;
         right: -2px;
@@ -122,9 +153,20 @@
         cursor: pointer;
     }
 
+    .username-row {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
     .details .username {
         color: white;
         font-weight: 600;
+    }
+
+    .caret {
+        color: #9ca3af;
+        font-size: 10px;
     }
 
     .details .type {

@@ -210,10 +210,13 @@
 <VerticalFlexWrapper blur={settingsShown || logShown || firstRunWarningShown}>
     <MainHeader
             account={options.start.account}
+            bind:options
             {running}
             {progressState}
             on:showSettings={() => showSettings("General")}
             on:showSkins={() => showSettings("Skins")}
+            on:accountSwitched={() => refresh()}
+            on:accountSignedOut={() => refresh()}
     />
 
     <ContentWrapper>

@@ -8,6 +8,7 @@
     import ButtonClose from "../common/ButtonClose.svelte";
 
     export let account;
+    export let options;
     export let running;
     export let progressState;
 </script>
@@ -26,8 +27,11 @@
     <Account
             username={account?.name}
             accountType={account?.type}
+            bind:options
             on:showSettings
             on:showSkins
+            on:accountSwitched
+            on:accountSignedOut
     />
     <ButtonClose />
 </TitleBar>

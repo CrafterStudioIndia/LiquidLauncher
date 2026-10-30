@@ -38,7 +38,25 @@ impl JavaRuntime {
 
         debug!("Executing Java runtime: {}", self.0.display());
 
-        let mut command = Command::new(&self.0);
+        let mut command = if cfg!(target_os = "linux") && std::path::Path::new("/usr/bin/prime-run").exists() {
+            debug!("Detected /usr/bin/prime-run, launching with dedicated NVIDIA GPU offload");
+            let mut cmd = Command::new("/usr/bin/prime-run");
+            cmd.arg(&self.0);
+            cmd
+        } else {
+            let mut cmd = Command::new(&self.0);
+            #[cfg(target_os = "linux")]
+            {
+                // In case prime-run is in PATH under a different directory or standard NVIDIA PRIME environment is used
+                if std::env::var("__NV_PRIME_RENDER_OFFLOAD").is_err() && std::path::Path::new("/usr/share/vulkan/icd.d/nvidia_icd.json").exists() {
+                    cmd.env("__NV_PRIME_RENDER_OFFLOAD", "1");
+                    cmd.env("__VK_LAYER_NV_optimus", "NVIDIA_only");
+                    cmd.env("__GLX_VENDOR_LIBRARY_NAME", "nvidia");
+                }
+            }
+            cmd
+        };
+
         command.current_dir(game_dir);
         command.args(arguments);
 

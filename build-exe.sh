@@ -15,23 +15,29 @@ fi
 
 cd "$SCRIPT_DIR"
 
-# 1. Check if running directly inside a Windows shell (Git Bash, MSYS2, CYGWIN)
+# 1. Native Windows environment check
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
     echo "[*] Windows environment detected."
-    echo "[*] Building Windows frontend & NSIS setup EXE..."
+    echo "[*] Building Windows frontend & standalone EXE..."
     bun install
     bun run build
-    bun run tauri build --bundles nsis
+    bun run tauri build --no-bundle
+    
+    EXE_OUT="src-tauri/target/release/liquidlauncher.exe"
     echo ""
-    echo "========================================="
-    echo "          Build Succeeded!              "
-    echo "========================================="
-    echo "Setup EXE location:      src-tauri/target/release/bundle/nsis/"
-    echo "Standalone EXE location: src-tauri/target/release/liquidlauncher.exe"
+    echo "[*] Standalone executable compiled: $EXE_OUT"
+    
+    if command -v iscc >/dev/null 2>&1; then
+        echo "[*] Running Inno Setup Compiler (ISCC)..."
+        iscc packaging/windows/setup.iss
+        echo "[*] Inno Setup installer generated in src-tauri/target/release/bundle/inno/"
+    else
+        echo "[!] 'iscc' not found in PATH. Install Inno Setup 6 to compile the installer setup.iss"
+    fi
     exit 0
 fi
 
-# 2. Linux host cross-compilation check
+# 2. Linux cross-compilation check
 TARGET="x86_64-pc-windows-gnu"
 echo "[*] Linux host detected. Checking cross-compilation toolchain for target: $TARGET..."
 
@@ -54,34 +60,33 @@ fi
 
 if [ "$HAS_TARGET" -eq 1 ] && [ "$HAS_MINGW" -eq 1 ]; then
     echo "[*] Toolchain verified (rust target $TARGET and MinGW-w64 available)."
-    echo "[*] Building frontend & cross-compiling Windows NSIS bundle..."
+    echo "[*] Compiling standalone Windows liquidlauncher.exe (without NSIS makensis dependency)..."
     bun install
     bun run build
-    bun run tauri build --target "$TARGET" --bundles nsis
+    bun run tauri build --target "$TARGET" --no-bundle
+    
+    EXE_PATH="src-tauri/target/$TARGET/release/liquidlauncher.exe"
     echo ""
     echo "========================================="
-    echo "     Cross-Compilation Succeeded!        "
+    echo "     Windows Compilation Succeeded!      "
     echo "========================================="
-    echo "Generated output in src-tauri/target/$TARGET/release/bundle/nsis/"
+    echo "Generated Windows binary:"
+    ls -lh "$EXE_PATH"
+    echo ""
+    echo "[*] Inno Setup script is prepared at: packaging/windows/setup.iss"
+    
+    if command -v iscc >/dev/null 2>&1; then
+        echo "[*] Found iscc, building Inno Setup installer..."
+        iscc packaging/windows/setup.iss
+    else
+        echo "[i] To package into an installer with Inno Setup:"
+        echo "    - On Windows: Run ISCC on 'packaging/windows/setup.iss' or install Inno Setup 6"
+        echo "    - Standalone executable is ready to use immediately at: $EXE_PATH"
+    fi
 else
     echo ""
-    echo "[!] Cross-compilation prerequisites for Windows ($TARGET) are not installed on this host:"
+    echo "[!] Cross-compilation prerequisites for Windows ($TARGET) are missing:"
     [ "$HAS_TARGET" -eq 0 ] && echo "    - Rust target '$TARGET' is missing (install via: rustup target add $TARGET)"
     [ "$HAS_MINGW" -eq 0 ] && echo "    - MinGW GCC is missing (on Arch: sudo pacman -S mingw-w64-gcc; on Ubuntu: sudo apt install gcc-mingw-w64)"
-    echo ""
-    echo "Recommended ways to build the Windows .exe:"
-    echo "  A. On Windows:"
-    echo "     Run 'build-exe.bat' or 'build-exe.ps1', or run:"
-    echo "       bun install && bun run build && bun run tauri build --bundles nsis"
-    echo ""
-    echo "  B. Via GitHub Actions:"
-    echo "     The CI workflow (.github/workflows/build.yml) automatically compiles"
-    echo "     the Windows installer and executable on a native 'windows-latest' runner."
-    echo ""
-    echo "  C. Set up cross-compilation on Linux:"
-    echo "     1. Install mingw-w64: sudo pacman -S mingw-w64-gcc (Arch) or sudo apt install gcc-mingw-w64 (Ubuntu)"
-    echo "     2. Add rust target: rustup target add x86_64-pc-windows-gnu"
-    echo "     3. Re-run this script."
     exit 1
 fi
-

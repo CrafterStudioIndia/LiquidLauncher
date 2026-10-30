@@ -47,6 +47,8 @@ pub(crate) struct Options {
 pub(crate) struct StartOptions {
     #[serde(rename = "account")]
     pub minecraft_account: Option<MinecraftAccount>,
+    #[serde(rename = "accounts", default)]
+    pub accounts: Vec<MinecraftAccount>,
     #[serde(rename = "customDataPath", default)]
     pub custom_data_path: String,
     #[serde(rename = "javaDistribution", default)]
@@ -157,6 +159,7 @@ impl Default for StartOptions {
     fn default() -> Self {
         Self {
             minecraft_account: None,
+            accounts: Vec::new(),
             java_distribution: DistributionSelection::default(),
             custom_data_path: String::new(),
             jvm_args: None,
