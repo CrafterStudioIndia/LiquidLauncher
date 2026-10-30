@@ -46,6 +46,7 @@ bun run build
 
 # 4. Build AppImage bundle
 echo "[*] Building Tauri AppImage bundle (this compiles Rust backend in release mode)..."
+export APPIMAGE_EXTRACT_AND_RUN=1
 bun run tauri build --bundles appimage
 
 # 5. Output result location

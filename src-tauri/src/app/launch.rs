@@ -333,97 +333,51 @@ pub(crate) async fn client_jar(app: &AppHandle, options: &Options) -> Result<Pat
     let destination = directory.join(CLIENT_JAR_NAME);
     let source = bundled_client_jar(app).ok();
 
-    // Auto-fetch latest jar from GitHub release if available
-    if let Ok(Some(prompt)) = check_and_fetch_release_jar(app, &destination).await {
-        info!("Updated client jar from release {} (uploaded {})", prompt.tag, prompt.time_ago);
-        return Ok(destination);
-    }
-
-    let up_to_date = match (&source, fs::metadata(&destination).await) {
-        (Some(source), Ok(installed)) => match fs::metadata(source).await {
-            Ok(bundled) => {
-                let size_eq = bundled.len() == installed.len();
-                let time_ok = match (bundled.modified(), installed.modified()) {
-                    (Ok(b), Ok(i)) => i >= b,
-                    _ => true,
-                };
-                size_eq && time_ok
-            }
-            Err(_) => true,
-        },
-        _ => true,
-    };
-    if destination.is_file() && up_to_date {
-        return Ok(destination);
-    }
-
-    fs::create_dir_all(&directory)
-        .await
-        .with_context(|| format!("Failed to create {}", directory.display()))?;
-
+    // 1. If a local bundled jar is found, copy it if missing or newer, and return immediately
     if let Some(source) = source {
-        info!(
-            "Installing bundled LiquidBounce jar from {}",
-            source.display()
-        );
-        copy_replacing(&source, &destination)
-            .await
-            .with_context(|| format!("Failed to copy {}", source.display()))?;
-        return Ok(destination);
-    }
-
-    // If no local bundled jar was found, verify hash of existing jar or download from GitHub release
-    if destination.is_file() {
-        let expected = release_cache_file()
-            .is_file()
-            .then(|| std::fs::read_to_string(release_cache_file()).ok())
-            .flatten()
-            .and_then(|raw| serde_json::from_str::<CachedReleaseJar>(&raw).ok())
-            .and_then(|c| c.digest)
-            .unwrap_or_else(|| DEFAULT_CLIENT_JAR_SHA256.to_string());
-
-        let hash_verified = match crate::utils::sha256sum(&destination) {
-            Ok(hash) => {
-                if !hash.eq_ignore_ascii_case(&expected) {
-                    warn!(
-                        "Existing LiquidBounce mod jar hash mismatch (found: {hash}, expected: {expected}). Getting new mod..."
-                    );
-                    false
-                } else {
-                    true
+        let up_to_date = match fs::metadata(&destination).await {
+            Ok(installed) => match fs::metadata(&source).await {
+                Ok(bundled) => {
+                    let size_eq = bundled.len() == installed.len();
+                    let time_ok = match (bundled.modified(), installed.modified()) {
+                        (Ok(b), Ok(i)) => i >= b,
+                        _ => true,
+                    };
+                    size_eq && time_ok
                 }
-            }
-            Err(e) => {
-                warn!("Failed to compute checksum for existing jar ({e}). Getting new mod...");
-                false
-            }
+                Err(_) => true,
+            },
+            _ => false,
         };
 
-        if !hash_verified {
-            let _ = fs::remove_file(&destination).await;
-            info!("Hash not verified, getting new mod from GitHub...");
-            if let Err(e) = download_client_from_github(&destination).await {
-                warn!("Failed to download replacement mod jar: {e}");
-            }
+        if !destination.is_file() || !up_to_date {
+            info!("Installing bundled LiquidBounce jar from {}", source.display());
+            fs::create_dir_all(&directory).await?;
+            copy_replacing(&source, &destination)
+                .await
+                .with_context(|| format!("Failed to copy {}", source.display()))?;
         }
-    }
-
-    if !destination.is_file() {
-        info!("No local LiquidBounce jar found. Attempting download from GitHub release...");
-        match download_client_from_github(&destination).await {
-            Ok(()) => return Ok(destination),
-            Err(e) => {
-                warn!("GitHub release mod download failed: {e}");
-            }
-        }
-    } else {
         return Ok(destination);
     }
 
-    bail!(
-        "The LiquidBounce mod jar is missing. Select one in Settings → General, \
-         or publish a release to GitHub with liquidbounce-0.37.0.jar."
-    );
+    // 2. If destination exists on disk, return immediately so the UI loads instantly,
+    // and check for release updates asynchronously in the background.
+    if destination.is_file() {
+        let app_clone = app.clone();
+        let dest_clone = destination.clone();
+        tokio::spawn(async move {
+            if let Ok(Some(prompt)) = check_and_fetch_release_jar(&app_clone, &dest_clone).await {
+                info!("Updated client jar from release {} in background", prompt.tag);
+            }
+        });
+        return Ok(destination);
+    }
+
+    // 3. If no local jar exists, fetch from GitHub release and verify SHA-256
+    info!("No local LiquidBounce jar found. Fetching from GitHub release...");
+    fs::create_dir_all(&directory).await?;
+    download_client_from_github(&destination).await?;
+    Ok(destination)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -495,6 +449,8 @@ pub async fn check_and_fetch_release_jar(
     let api_url = "https://api.github.com/repos/CrafterStudioIndia/LiquidBounce/releases/latest";
     let client = reqwest::Client::builder()
         .user_agent("LiquidLauncher")
+        .timeout(std::time::Duration::from_secs(6))
+        .connect_timeout(std::time::Duration::from_secs(4))
         .build()?;
 
     let res = match client.get(api_url).send().await {

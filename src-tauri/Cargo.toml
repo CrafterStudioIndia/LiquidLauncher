@@ -88,5 +88,5 @@ custom-protocol = [ "tauri/custom-protocol" ]
 
 [profile.release]
 strip = true
-lto = true
-codegen-units = 1
+lto = "thin"
+codegen-units = 16
