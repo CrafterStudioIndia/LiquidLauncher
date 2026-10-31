@@ -818,9 +818,18 @@ pub async fn sync_for_launch(
     }
 
     // Auto-register player with backend server on launch
+    let reg_post_url = format!("{}/api/register", base_url);
     let reg_url = format!("{}/query.php?uuid={}&name={}", base_url, player_uuid, player_name);
     let client = HTTP_CLIENT.clone();
+    let uuid_str = player_uuid.to_string();
+    let name_str = player_name.to_string();
     tokio::spawn(async move {
+        let body = serde_json::json!({
+            "username": name_str,
+            "uuid": uuid_str,
+            "accountType": "offline"
+        });
+        let _ = client.post(&reg_post_url).json(&body).send().await;
         let _ = client.get(&reg_url).send().await;
     });
 }

@@ -28,8 +28,16 @@ pub(crate) async fn login_offline(username: String) -> Result<MinecraftAccount, 
     let id_str = id.to_string();
     tokio::spawn(async move {
         let backend_url = std::env::var("LIQUID_BACKEND_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
-        let reg_url = format!("{}/query.php?uuid={}&name={}", backend_url.trim_end_matches('/'), id_str, name_clone);
-        let _ = crate::HTTP_CLIENT.get(&reg_url).send().await;
+        let base = backend_url.trim_end_matches('/');
+        let reg_post_url = format!("{}/api/register", base);
+        let reg_query_url = format!("{}/query.php?uuid={}&name={}", base, id_str, name_clone);
+        let body = serde_json::json!({
+            "username": name_clone,
+            "uuid": id_str,
+            "accountType": "offline"
+        });
+        let _ = crate::HTTP_CLIENT.post(&reg_post_url).json(&body).send().await;
+        let _ = crate::HTTP_CLIENT.get(&reg_query_url).send().await;
     });
     Ok(account)
 }
