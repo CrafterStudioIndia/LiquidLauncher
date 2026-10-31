@@ -287,10 +287,10 @@ pub(crate) async fn run_client(
         .await
         .map_err(|e| format!("unable to select the instance: {e:#}"))?;
 
-    let backend_url = if !options.start_options.backend_url.is_empty() {
+    let backend_url = if !options.start_options.backend_url.is_empty() && options.start_options.backend_url != "https://liquid-backend.vercel.app" {
         options.start_options.backend_url.clone()
     } else {
-        std::env::var("LIQUID_BACKEND_URL").unwrap_or_else(|_| "https://liquid-backend.vercel.app".to_string())
+        std::env::var("LIQUID_BACKEND_URL").unwrap_or_else(|_| "http://localhost:3000".to_string())
     };
 
     info!("Preparing LiquidBounce for instance {}...", instance.name);
