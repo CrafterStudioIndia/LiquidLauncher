@@ -15,7 +15,12 @@
         if (!canLogin) return;
         busy = true;
         try {
-            options.start.account = await invoke("login_offline", {username: username.trim()});
+            const acc = await invoke("login_offline", {username: username.trim()});
+            options.start.account = acc;
+            let list = options.start.accounts || [];
+            if (!list.some(a => a.name?.toLowerCase() === acc.name?.toLowerCase())) {
+                options.start.accounts = [acc, ...list];
+            }
             await options.store();
         } catch (e) {
             console.error("Failed to sign in:", e);

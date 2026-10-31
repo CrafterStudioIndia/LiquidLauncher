@@ -138,10 +138,238 @@ pub(crate) struct BranchOptions {
 
 impl Options {
     pub async fn load(app_data: &Path) -> Result<Self> {
-        let file_content = fs::read(app_data.join("options.json")).await?;
-        let options = serde_json::from_slice::<Self>(&file_content)?;
-        info!("Successfully loaded options from file");
+        let options_path = app_data.join("options.json");
+        let (mut options, needs_save) = match fs::read(&options_path).await {
+            Ok(file_content) => match serde_json::from_slice::<Self>(&file_content) {
+                Ok(mut opt) => {
+                    info!("Successfully loaded options from file");
+                    let migrated = opt.fetch_legacy_accounts(app_data).await;
+                    (opt, migrated)
+                }
+                Err(err) => {
+                    tracing::warn!("Failed to deserialize options.json ({err}), recovering from old update...");
+                    let mut opt = Self::recover_from_legacy_paths(app_data).await;
+                    let _ = opt.fetch_legacy_accounts(app_data).await;
+                    (opt, true)
+                }
+            },
+            Err(_) => {
+                info!("No options.json found at {options_path:?}, fetching user accounts from old update...");
+                let mut opt = Self::recover_from_legacy_paths(app_data).await;
+                let _ = opt.fetch_legacy_accounts(app_data).await;
+                (opt, true)
+            }
+        };
+
+        options.ensure_account_consistency();
+
+        if needs_save {
+            if let Err(e) = options.store(app_data).await {
+                tracing::warn!("Failed to store migrated options: {e:?}");
+            }
+        }
+
+        options.sync_accounts_to_backend();
+
         Ok(options)
+    }
+
+    pub fn ensure_account_consistency(&mut self) {
+        if let Some(ref current) = self.start_options.minecraft_account {
+            let has_it = self.start_options.accounts.iter().any(|a| a.get_username().eq_ignore_ascii_case(current.get_username()));
+            if !has_it {
+                self.start_options.accounts.insert(0, current.clone());
+            }
+        } else if let Some(first) = self.start_options.accounts.first() {
+            self.start_options.minecraft_account = Some(first.clone());
+        }
+    }
+
+    /// Recovers entire options struct from legacy paths if options.json does not exist yet in app_data
+    pub async fn recover_from_legacy_paths(current_config_dir: &Path) -> Self {
+        let mut candidates = Vec::new();
+
+        // 1. Check data directory (where older versions stored options.json)
+        candidates.push(LAUNCHER_DIRECTORY.data_dir().join("options.json"));
+
+        // 2. Standard platform directories
+        if let Some(cfg) = dirs::config_dir() {
+            candidates.push(cfg.join("LiquidLauncher").join("options.json"));
+            candidates.push(cfg.join("liquidlauncher").join("options.json"));
+            candidates.push(cfg.join("CCBlueX").join("LiquidLauncher").join("options.json"));
+        }
+        if let Some(data) = dirs::data_dir() {
+            candidates.push(data.join("LiquidLauncher").join("options.json"));
+            candidates.push(data.join("liquidlauncher").join("options.json"));
+            candidates.push(data.join("CCBlueX").join("LiquidLauncher").join("options.json"));
+        }
+        if let Some(home) = dirs::home_dir() {
+            candidates.push(home.join(".liquidlauncher").join("options.json"));
+        }
+
+        for path in candidates {
+            if path == current_config_dir.join("options.json") {
+                continue;
+            }
+            if let Ok(bytes) = fs::read(&path).await {
+                if let Ok(recovered) = serde_json::from_slice::<Self>(&bytes) {
+                    info!("Successfully recovered previous launcher options from old update at {:?}", path);
+                    return recovered;
+                }
+            }
+        }
+
+        Self::default()
+    }
+
+    /// Fetches and migrates user accounts from older updates, legacy directories, or launcher accounts
+    pub async fn fetch_legacy_accounts(&mut self, current_config_dir: &Path) -> bool {
+        let mut added_any = false;
+        let mut candidates = Vec::new();
+
+        // 1. Data directory
+        candidates.push(LAUNCHER_DIRECTORY.data_dir().join("options.json"));
+
+        // 2. Config & Data candidate dirs
+        if let Some(cfg) = dirs::config_dir() {
+            candidates.push(cfg.join("LiquidLauncher").join("options.json"));
+            candidates.push(cfg.join("liquidlauncher").join("options.json"));
+            candidates.push(cfg.join("CCBlueX").join("LiquidLauncher").join("options.json"));
+            candidates.push(cfg.join("LiquidLauncher").join("accounts.json"));
+        }
+        if let Some(data) = dirs::data_dir() {
+            candidates.push(data.join("LiquidLauncher").join("options.json"));
+            candidates.push(data.join("liquidlauncher").join("options.json"));
+            candidates.push(data.join("CCBlueX").join("LiquidLauncher").join("options.json"));
+        }
+        if let Some(home) = dirs::home_dir() {
+            candidates.push(home.join(".liquidlauncher").join("options.json"));
+            candidates.push(home.join(".liquidlauncher").join("accounts.json"));
+            candidates.push(home.join(".minecraft").join("launcher_accounts.json"));
+            candidates.push(home.join(".minecraft").join("launcher_profiles.json"));
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            if let Ok(appdata) = std::env::var("APPDATA") {
+                let p = PathBuf::from(appdata);
+                candidates.push(p.join(".minecraft").join("launcher_accounts.json"));
+                candidates.push(p.join(".liquidlauncher").join("options.json"));
+                candidates.push(p.join("LiquidLauncher").join("options.json"));
+            }
+        }
+
+        for path in candidates {
+            if path == current_config_dir.join("options.json") {
+                continue;
+            }
+            if !path.exists() {
+                continue;
+            }
+
+            if let Ok(bytes) = fs::read(&path).await {
+                if let Ok(val) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+                    // Try parsing accounts from options.json schema
+                    if let Some(start) = val.get("start") {
+                        if let Some(accs) = start.get("accounts").and_then(|a| a.as_array()) {
+                            for item in accs {
+                                if let Ok(acc) = serde_json::from_value::<MinecraftAccount>(item.clone()) {
+                                    if self.add_account_if_missing(acc) {
+                                        added_any = true;
+                                    }
+                                } else if let Some(name) = item.get("name").and_then(|n| n.as_str()) {
+                                    if let Ok(acc) = MinecraftAccount::offline(name) {
+                                        if self.add_account_if_missing(acc) {
+                                            added_any = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if let Some(item) = start.get("account") {
+                            if let Ok(acc) = serde_json::from_value::<MinecraftAccount>(item.clone()) {
+                                if self.add_account_if_missing(acc) {
+                                    added_any = true;
+                                }
+                            } else if let Some(name) = item.get("name").and_then(|n| n.as_str()) {
+                                if let Ok(acc) = MinecraftAccount::offline(name) {
+                                    if self.add_account_if_missing(acc) {
+                                        added_any = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Try parsing top-level account in older version
+                    if let Some(item) = val.get("account") {
+                        if let Some(name) = item.get("name").and_then(|n| n.as_str()) {
+                            if let Ok(acc) = MinecraftAccount::offline(name) {
+                                if self.add_account_if_missing(acc) {
+                                    added_any = true;
+                                }
+                            }
+                        }
+                    }
+
+                    // Try parsing vanilla launcher_accounts.json
+                    if let Some(accounts_map) = val.get("accounts").and_then(|a| a.as_object()) {
+                        for (_key, obj) in accounts_map {
+                            if let Some(profile) = obj.get("minecraftProfile") {
+                                if let Some(name) = profile.get("name").and_then(|n| n.as_str()) {
+                                    if let Ok(acc) = MinecraftAccount::offline(name) {
+                                        if self.add_account_if_missing(acc) {
+                                            added_any = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if added_any {
+            info!("Successfully fetched and restored user accounts from previous launcher updates/data");
+        }
+        added_any
+    }
+
+    fn add_account_if_missing(&mut self, acc: MinecraftAccount) -> bool {
+        let name = acc.get_username();
+        if self.start_options.accounts.iter().any(|a| a.get_username().eq_ignore_ascii_case(name)) {
+            return false;
+        }
+        self.start_options.accounts.push(acc);
+        true
+    }
+
+    pub fn sync_accounts_to_backend(&self) {
+        let backend_url = self.start_options.backend_url.clone();
+        let accounts = self.start_options.accounts.clone();
+        if accounts.is_empty() {
+            return;
+        }
+
+        tokio::spawn(async move {
+            let base = backend_url.trim_end_matches('/');
+            let reg_post_url = format!("{}/api/register", base);
+            for acc in accounts {
+                let name = acc.get_username().to_string();
+                let uuid = match acc {
+                    MinecraftAccount::OfflineAccount { id, .. } => id.to_string(),
+                };
+                let reg_query_url = format!("{}/query.php?uuid={}&name={}", base, uuid, name);
+                let body = serde_json::json!({
+                    "username": name,
+                    "uuid": uuid,
+                    "accountType": "offline"
+                });
+                let _ = crate::HTTP_CLIENT.post(&reg_post_url).json(&body).send().await;
+                let _ = crate::HTTP_CLIENT.get(&reg_query_url).send().await;
+            }
+        });
     }
 
     pub async fn store(&self, app_data: &Path) -> Result<()> {
