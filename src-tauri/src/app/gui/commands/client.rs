@@ -287,8 +287,14 @@ pub(crate) async fn run_client(
         .await
         .map_err(|e| format!("unable to select the instance: {e:#}"))?;
 
+    let backend_url = if !options.start_options.backend_url.is_empty() {
+        options.start_options.backend_url.clone()
+    } else {
+        std::env::var("LIQUID_BACKEND_URL").unwrap_or_else(|_| "https://liquid-backend.vercel.app".to_string())
+    };
+
     info!("Preparing LiquidBounce for instance {}...", instance.name);
-    skins::sync_for_launch(&data, &instance.id, &account_name).await;
+    skins::sync_for_launch(&data, &instance.id, &account_name, &uuid, &backend_url).await;
     let launch_manifest = launch::manifest(&app, &options, &instance)
         .await
         .map_err(|e| format!("failed to prepare the local build: {e:#}"))?;
@@ -307,9 +313,12 @@ pub(crate) async fn run_client(
 
     let copy_of_runner_instance = runner_instance.clone();
 
+    let mut jvm_args = options.start_options.jvm_args.clone().unwrap_or_default();
+    jvm_args.push(format!("-Dliquid.backend.url={}", backend_url));
+
     let parameters = StartParameter {
         java_distribution: options.start_options.java_distribution.clone(),
-        jvm_args: options.start_options.jvm_args.clone().unwrap_or_default(),
+        jvm_args,
         memory: options.start_options.memory,
         custom_data_path: if !options.start_options.custom_data_path.is_empty() {
             Some(options.start_options.custom_data_path.clone())

@@ -748,8 +748,16 @@ pub async fn sync_skin_to_single_instance(
     }
 }
 
-/// Ensures the active skin is synced for the current player before launch.
-pub async fn sync_for_launch(data_dir: &Path, instance_id: &str, player_name: &str) {
+/// Ensures the active skin and player registration are synced with instances and the backend server before launch.
+pub async fn sync_for_launch(
+    data_dir: &Path,
+    instance_id: &str,
+    player_name: &str,
+    player_uuid: &str,
+    backend_url: &str,
+) {
+    let base_url = backend_url.trim_end_matches('/');
+
     if let Ok(Some(active)) = get_active().await {
         let skin_path = skins_dir().join(&active.file_name);
         if let Ok(bytes) = fs::read(&skin_path).await {
@@ -786,8 +794,35 @@ pub async fn sync_for_launch(data_dir: &Path, instance_id: &str, player_name: &s
                 )
                 .await;
             }
+
+            // Auto-upload active skin to backend server so other multiplayer players can see it
+            let upload_url = format!(
+                "{}/api/skin/{}?model={}",
+                base_url,
+                player_name,
+                if active.model == "slim" { "slim" } else { "classic" }
+            );
+            let client = HTTP_CLIENT.clone();
+            let bytes_clone = bytes.clone();
+            let uuid_clone = player_uuid.to_string();
+            tokio::spawn(async move {
+                let _ = client
+                    .post(&upload_url)
+                    .header("Content-Type", "image/png")
+                    .header("X-User-UUID", &uuid_clone)
+                    .body(bytes_clone)
+                    .send()
+                    .await;
+            });
         }
     }
+
+    // Auto-register player with backend server on launch
+    let reg_url = format!("{}/query.php?uuid={}&name={}", base_url, player_uuid, player_name);
+    let client = HTTP_CLIENT.clone();
+    tokio::spawn(async move {
+        let _ = client.get(&reg_url).send().await;
+    });
 }
 
 #[cfg(test)]

@@ -17,10 +17,10 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
 DisableProgramGroupPage=yes
-LicenseFile=..\LICENSE
-OutputDir=..\src-tauri\target\release\bundle\inno
+LicenseFile=..\..\LICENSE
+OutputDir=..\..\src-tauri\target\release\bundle\inno
 OutputBaseFilename=LiquidLauncher_{#MyAppVersion}_x64_setup
-SetupIconFile=..\src-tauri\icons\icon.ico
+SetupIconFile=..\..\src-tauri\icons\icon.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
@@ -36,8 +36,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 ; The compiled Windows binary from x86_64-pc-windows-gnu or native build
-Source: "..\src-tauri\target\x86_64-pc-windows-gnu\release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion; Check: FileExists(ExpandConstant('{src}\..\src-tauri\target\x86_64-pc-windows-gnu\release\{#MyAppExeName}'))
-Source: "..\src-tauri\target\release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion; Check: not FileExists(ExpandConstant('{src}\..\src-tauri\target\x86_64-pc-windows-gnu\release\{#MyAppExeName}'))
+Source: "..\..\src-tauri\target\x86_64-pc-windows-gnu\release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion; Check: FileExists(ExpandConstant('{src}\..\..\src-tauri\target\x86_64-pc-windows-gnu\release\{#MyAppExeName}'))
+Source: "..\..\src-tauri\target\release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion; Check: not FileExists(ExpandConstant('{src}\..\..\src-tauri\target\x86_64-pc-windows-gnu\release\{#MyAppExeName}'))
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"

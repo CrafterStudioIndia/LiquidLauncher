@@ -78,8 +78,12 @@ if [ "$HAS_TARGET" -eq 1 ] && [ "$HAS_MINGW" -eq 1 ]; then
     if command -v iscc >/dev/null 2>&1; then
         echo "[*] Found iscc, building Inno Setup installer..."
         iscc packaging/windows/setup.iss
+    elif [ -f "node_modules/.bin/innosetup-compiler" ]; then
+        echo "[*] Running npm innosetup-compiler on packaging/windows/setup.iss..."
+        ./node_modules/.bin/innosetup-compiler packaging/windows/setup.iss || true
     else
         echo "[i] To package into an installer with Inno Setup:"
+        echo "    - Run: npm run iss (powered by innosetup-compiler)"
         echo "    - On Windows: Run ISCC on 'packaging/windows/setup.iss' or install Inno Setup 6"
         echo "    - Standalone executable is ready to use immediately at: $EXE_PATH"
     fi

@@ -22,7 +22,16 @@ use crate::minecraft::auth::MinecraftAccount;
 /// This build only signs in with offline ("cracked") accounts.
 #[tauri::command]
 pub(crate) async fn login_offline(username: String) -> Result<MinecraftAccount, String> {
-    MinecraftAccount::offline(&username).map_err(|error| format!("{error}"))
+    let account = MinecraftAccount::offline(&username).map_err(|error| format!("{error}"))?;
+    let MinecraftAccount::OfflineAccount { ref name, ref id } = account;
+    let name_clone = name.clone();
+    let id_str = id.to_string();
+    tokio::spawn(async move {
+        let backend_url = std::env::var("LIQUID_BACKEND_URL").unwrap_or_else(|_| "https://liquid-backend.vercel.app".to_string());
+        let reg_url = format!("{}/query.php?uuid={}&name={}", backend_url.trim_end_matches('/'), id_str, name_clone);
+        let _ = crate::HTTP_CLIENT.get(&reg_url).send().await;
+    });
+    Ok(account)
 }
 
 /// An offline account has no session to refresh; the name and id never change.

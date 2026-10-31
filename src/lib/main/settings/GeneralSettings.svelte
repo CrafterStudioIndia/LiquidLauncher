@@ -7,6 +7,7 @@
     import ToggleSetting from "../../settings/ToggleSetting.svelte";
     import ButtonSetting from "../../settings/ButtonSetting.svelte";
     import Description from "../../settings/Description.svelte";
+    import TextSetting from "../../settings/TextSetting.svelte";
     import LauncherVersion from "../../settings/LauncherVersion.svelte";
     import AccountSwitcherMenu from "../AccountSwitcherMenu.svelte";
     import {onMount} from "svelte";

@@ -62,6 +62,12 @@ pub(crate) struct StartOptions {
     /// A LiquidBounce jar selected by the user. Empty means the bundled one.
     #[serde(rename = "clientJar", default)]
     pub client_jar: String,
+    #[serde(rename = "backendUrl", default = "default_backend_url")]
+    pub backend_url: String,
+}
+
+fn default_backend_url() -> String {
+    "https://liquid-backend.vercel.app".to_string()
 }
 
 #[derive(Clone, Serialize, Deserialize, Default)]
@@ -166,6 +172,7 @@ impl Default for StartOptions {
             memory: default_memory(),
             installation: MinecraftInstallationOptions::default(),
             client_jar: String::new(),
+            backend_url: default_backend_url(),
         }
     }
 }
