@@ -531,8 +531,10 @@
         needsRender = true;
     }
 
-    $: if (skinUrl) {
-        loadTexture(skinUrl);
+    $: effectiveSkinUrl = skinUrl || (model === "slim" ? "/img/default_skins/slim/alex.png" : "/img/default_skins/wide/steve.png");
+
+    $: if (effectiveSkinUrl) {
+        loadTexture(effectiveSkinUrl);
     }
 
     onMount(() => {
@@ -545,15 +547,8 @@
         programInfo = initShaders();
         updateBuffers();
 
-        // Initialize placeholder texture so render() immediately functions
-        if (!texture) {
-            texture = gl.createTexture();
-            gl.bindTexture(gl.TEXTURE_2D, texture);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([80, 85, 95, 255]));
-        }
-
-        if (skinUrl) {
-            loadTexture(skinUrl);
+        if (effectiveSkinUrl) {
+            loadTexture(effectiveSkinUrl);
         }
 
         render();
