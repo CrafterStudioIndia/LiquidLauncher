@@ -38,8 +38,8 @@ const SKINS_FOLDER: &str = "skins";
 const SKINS_FILE: &str = "skins.json";
 const MAX_SKIN_BYTES: usize = 2 * 1024 * 1024; // 2 MB
 
-const STEVE_PNG_BASE64: &str = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAABkElEQVR4nO3aMUvDQBQH8P/9uUlEHP0EDQ7iLBYE5wqCUzft4uIsWV2kH8DFSbfiIAjxCwgtTk4ixS6uoiAinVyUVgQbSK4hiUnz3g9CQu7ykhzc5SU5A4e6t/QVV+7vbMQe3zi+MCgxQjhCOEI4QjhCOEI4Qjjjes7nrfv4XGieQAhnp6kUle21L29QqQbwI260fniK+vI52nu3P/XO1tDt78LH/sw3jPk7Brjy+veP4Xi9uDAfWy9JA8zUGNC764+XKuG0FU+CHp6Gn+NltC1qEBw52FpHFZnwjlrNn8gLPO9hojwIgvg+2+mkyyuazUTxr++vUn1/IIQjhCOEM+E+n9TgaDWy7Ld/Nla2URjHmGLzPPfL6xvKzuYZvLXZQtkRwlmUXPg5n1TDUU4IRwhHCEcIZ8MvO0kNEJ0IzQJCOBZ9AUoppZRSSimllFL/zWQdMOv5BWn//7sQwhHCEcKZtAHynF+QyZwiB0I4QjhCOFv1//8uhHCEcIRwhHA2bYC08wuAORSJEI5FX0DRvgH7zGA2+OLEAgAAAABJRU5ErkJggg==";
-const ALEX_PNG_BASE64: &str = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAABa0lEQVR4nO3aMUoDQRQG4H9+tre3FQ0ImxOk08ZSQVC08gS5gCB4AS8hKSwsRUi5lWUsxFjFwt4DiBIhYhays5PdzST53wcLYWbz2IGdN4+dcfC4P97+LupvHZwV/n/34sphiRHiCHGEOEIcIY4QR4hzvnW+aYd3b1HrBEJcUuamWdXe68MtVh3LDH7zqIuTweNf2/j3uM1XBq9kDmhVHFToW7FSOWCYPf9ecjlgYqeTYt0Q4ly+4XwvncoJw4/Pqf6nl/fCOXva7VSqK3o3Wen4l+39yt8dCHGEOEKcy8/5UF/pxsy+yRy9HvSxaL5cMtcyGCrGwEMR4ghxCZbc/7U+RA9ZqfsIcYQ4QlySr/VDbRXUARJJcNQfoVHtZsMT4hj7AYwxxhhjjDHGGGMWzdUdsM7zBXXs//sQ4ghxhDhXNUCT5wvq2P/3IcQR4ghxybrv//sQ4ghxhLikaoCq5wtiI8QR4hj7AWL7AQHJVSGlO1V2AAAAAElFTkSuQmCC";
+const STEVE_PNG_BASE64: &str = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAdVBMVEUAAAAKvLwAzMwmGgokGAgrHg0zJBE/KhW3g2uzeV5SPYn///+qclmbY0mQWT8Af38AaGhVVVWUYD52SzOBUzmPXj5JJRBCHQp3QjVqQDA0JRIoKCg3Nzc/Pz9KSko6MYlBNZtGOqUDenoFiIgElZUApKQAr6/wvakZAAAAAXRSTlMAQObYZgAAAolJREFUeNrt1l1rHucZReFrj/whu5hSCCQtlOTE/f+/Jz4q9Cu0YIhLcFVpVg+FsOCVehi8jmZgWOzZz33DM4CXlum3gH95GgeAzQZVeL4gTm6Cbp4vqFkD8HwBazPY8wWbMq9utu3mNZ5fotVezbzOE3kBEFbaZuc8kb00NTMUbWJp678Xf2GV7RRtx1TDQQ6XBNvsmL2+2vHq1TftmMPIyAWujtN2cl274ua2jpVpZneXEjjo7XW1q53V9ds4ODO5xIuhvGHvfLI3aixauig415uuO2+vl9+cncfsFw25zL650fXn687jqnXuP68/X3+eV3zE7y6u9eB73MlfAcfbTf3yR8CfAX+if8S/H5/EAbAxj5LN48tULvEBOh8V1AageMTXe2YHAOwHbZxrzPkSR3+ffr8TR2JDzE/4Fj8CDgEwDsW+q+9GsR07hhg2CsALBgMo2v5wNxXnQXMeGQVW7gUAyKI2m6KDsJ8Au3++F5RZO+kKNQjQcLLWgjwUjBXLltFgWWMUUlviocBgNoxNGgMjSxiYAA7zgLFo2hgIENiDU8gQCzDOmViGFAsEuBcQSDCothhpJaDRA8E5fHqH2nTbYm5fHLo1V0u3B7DAuheoeScRYabjjjuzs17cHVaTrTXmK78m9swP34d9oK/dfeXSIH2PW/MXwPvxN/bJlxw8zlYAcEyeI6gNgA/O8P8neN8xe1IHP2gTzegjvhUDfuRygmwEs2GE4mkCDIAzm2R4yAuPsIdR9k8AvMc+3L9+2UEjo4WP0FpgP19O0MzCsqxIoMsdDBvYcQyGmO0ZJRoYCKjLJWY0BAhYwGUBCgkh8MRdOKt+ruqMwAB2OcEX94U1TPbYJP0PkyyAI1S6cSIAAAAASUVORK5CYII=";
+const ALEX_PNG_BASE64: &str = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAZlBMVEUAAAD////v2r/r0LDvu7HfxKLUt4/zqFiUyJKMvorrmD+GuYTljT97snjegS5xq26UlmuAglpvb29lZWV8Vz51UDhYWFhyTjZPT09sRi5kQSwjYiQrVChcOyc/Pz82NjYYOBYoKCgm8xoJAAAAAXRSTlMAQObYZgAAAwZJREFUeNrtlu1W6jAQRWtjWiaZtCC9/YgC8v4vec9Mg6Uur6b8ve6S0Lo8O2NYmClusOMGF7Nr8HKu2IoDTYPk44K6lvBciePNAm7mlTGz3G2voAaYZg9vFzCCjtnZqoHjAYHDJjAM1tqqgmR7Bahf9tFaA6zND6JwXRpxxosZIkz4uQzOWFmTrJPOUgdjOP1hzu7flmNrJe4wtCBoMgR1LVE1mNIYNbAurpafN5N5Xto8vZbl65PhWg0aRiU/C2Rpa0x5w/LHnjQwZVTgGk755+eyNMbWXDeukQIwMjaRm6qyJjmMtTAi1ziHF0OQQwsul+u1SJBnZsTbRJEgIqzxD8H1erksAt80MLTtCawFpvpScDqtKzhUYpA8yKgAv7Wq4GCripmT4PsKPFGIQxdjbFsPCPiDsbY6tAvBU2K+KRZiCHHquimC0ylGCoH8vjSmVEG4xb0Mmb2MYmGYpgH5boBA7iAIPuxL5CUtT0Q72u0wy6SDioVOosh3k5ggQIZgQB4iDITlOqwoFiaJwzJAcMJARhOShUCX3AGjWMWYYqHv+zghHntwPPaoWQJh58mLRe5FUSpQ6BenWDgi1B81rCAki0oIgiDvQRRlMkh+JdDgi2b78zieEUKEWglRG4gQp+8EEupTeOz78f39/U32n1oKb3iAQ642CWQfPlWAUAr3MtoQ2jck4XmTe7wL7ykPrFkJRkm9HCUuopF8CN6TXsGTEAjvt2+7Gu4Fl/N5xN+PMs6XCwZJLv4BER480MzHFsyfwi9ZpDNSYH7IIKcDPKB4iHSwPk7tVo974ZDYZ1VQ/PKfg9Nsddg6ouWfyCMNh2OqzBbBCdxXUDMq2Cq4r6CmDRVEoRvm4z4Q8OwowdmCbgDThEq8Jwg8pb4gSzANU5cY4l1ngCtDMM0NR4yYwfS5LzgoewXPXwuQ1bZDsIJJ2OJHPvcL49wQJEyGQI+5pV/o9Sj8IKcCSd31C5sFEhrv+gVrzAbBul9QINiwB+t+QdHWLBmyPgXtF8CtX5CO4LsK/gL4WlU0/HKH/gAAAABJRU5ErkJggg==";
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -101,17 +101,21 @@ async fn read_library() -> Result<SkinLibraryFile> {
         Err(_) => SkinLibraryFile::default(),
     };
 
-    if file.skins.is_empty() {
-        // Initialize default Steve and Alex
-        let steve_bytes = STANDARD.decode(STEVE_PNG_BASE64)?;
-        let alex_bytes = STANDARD.decode(ALEX_PNG_BASE64)?;
+    let steve_bytes = STANDARD.decode(STEVE_PNG_BASE64)?;
+    let alex_bytes = STANDARD.decode(ALEX_PNG_BASE64)?;
 
-        let steve_path = dir.join("steve.png");
-        let alex_path = dir.join("alex.png");
+    let steve_path = dir.join("steve.png");
+    let alex_path = dir.join("alex.png");
 
+    // Ensure steve.png and alex.png are always official Mojang 64x64 textures (>= 800 bytes)
+    if !steve_path.is_file() || fs::metadata(&steve_path).await.map(|m| m.len() < 800).unwrap_or(true) {
         let _ = fs::write(&steve_path, &steve_bytes).await;
+    }
+    if !alex_path.is_file() || fs::metadata(&alex_path).await.map(|m| m.len() < 800).unwrap_or(true) {
         let _ = fs::write(&alex_path, &alex_bytes).await;
+    }
 
+    if file.skins.is_empty() {
         file.skins = vec![
             StoredSkin {
                 id: "steve".to_string(),
@@ -596,7 +600,7 @@ pub async fn sync_skin_to_instances(skin: &StoredSkin, skin_file: &Path, data_di
     // 2. Propagate to every known game instance
     if let Ok(instance_list) = instances::list(data_dir).await {
         for instance in instance_list {
-            sync_skin_to_single_instance(&skin.model, &skin_bytes, skin_file, data_dir, &instance.id).await;
+            sync_skin_to_single_instance(skin, &skin_bytes, skin_file, data_dir, &instance.id).await;
         }
     }
 
@@ -605,7 +609,7 @@ pub async fn sync_skin_to_instances(skin: &StoredSkin, skin_file: &Path, data_di
 
 /// Syncs skin to a specific instance folder.
 pub async fn sync_skin_to_single_instance(
-    model: &str,
+    skin: &StoredSkin,
     skin_bytes: &[u8],
     skin_file: &Path,
     data_dir: &Path,
@@ -616,7 +620,29 @@ pub async fn sync_skin_to_single_instance(
         let _ = fs::create_dir_all(&game_dir).await;
     }
 
-    // Direct skin.png in instance folder
+    let is_default = skin.id.eq_ignore_ascii_case("steve") || skin.id.eq_ignore_ascii_case("alex");
+
+    if is_default {
+        // If default Steve or Alex, remove instance-level overrides so Minecraft displays its native skins
+        let _ = fs::remove_file(game_dir.join("skin.png")).await;
+        let mod_skins_dir = game_dir.join("skins");
+        if mod_skins_dir.exists() {
+            let _ = fs::remove_file(mod_skins_dir.join("active.png")).await;
+            let _ = fs::remove_file(mod_skins_dir.join("default.png")).await;
+            let meta = json!({
+                "id": skin.id,
+                "name": skin.name,
+                "model": skin.model,
+            });
+            let _ = fs::write(
+                mod_skins_dir.join("active.json"),
+                serde_json::to_vec_pretty(&meta).unwrap_or_default(),
+            ).await;
+        }
+        return;
+    }
+
+    // Direct skin.png in instance folder for custom skins
     let _ = fs::write(game_dir.join("skin.png"), skin_bytes).await;
 
     // Dedicated LiquidBounce Cosmetics Engine skin directory: <gameDir>/skins/
@@ -625,8 +651,9 @@ pub async fn sync_skin_to_single_instance(
         let _ = fs::write(mod_skins_dir.join("active.png"), skin_bytes).await;
         let _ = fs::write(mod_skins_dir.join("default.png"), skin_bytes).await;
         let meta = json!({
-            "id": "active",
-            "model": model,
+            "id": skin.id,
+            "name": skin.name,
+            "model": skin.model,
         });
         let _ = fs::write(
             mod_skins_dir.join("active.json"),
@@ -666,7 +693,7 @@ pub async fn sync_skin_to_single_instance(
     if fs::create_dir_all(&csl_dir).await.is_ok() {
         let _ = fs::write(csl_dir.join("default.png"), skin_bytes).await;
         let csl_meta = json!({
-            "type": if model == "slim" { "slim" } else { "default" }
+            "type": if skin.model == "slim" { "slim" } else { "default" }
         });
         let _ = fs::write(
             csl_dir.join("default.json"),
@@ -680,7 +707,7 @@ pub async fn sync_skin_to_single_instance(
     let _ = fs::create_dir_all(&lb_dir).await;
     let modules_json_path = lb_dir.join("modules.json");
 
-    let lb_model_tag = if model == "slim" { "Slim" } else { "Default" };
+    let lb_model_tag = if skin.model == "slim" { "Slim" } else { "Default" };
     let skin_abs_path = skin_file.to_string_lossy().into_owned();
 
     let mut root: Value = if let Ok(content) = fs::read_to_string(&modules_json_path).await {
@@ -759,61 +786,69 @@ pub async fn sync_for_launch(
     let base_url = backend_url.trim_end_matches('/');
 
     if let Ok(Some(active)) = get_active().await {
+        let is_default = active.id.eq_ignore_ascii_case("steve") || active.id.eq_ignore_ascii_case("alex");
         let skin_path = skins_dir().join(&active.file_name);
         if let Ok(bytes) = fs::read(&skin_path).await {
-            sync_skin_to_single_instance(&active.model, &bytes, &skin_path, data_dir, instance_id).await;
+            sync_skin_to_single_instance(&active, &bytes, &skin_path, data_dir, instance_id).await;
 
-            // Dedicated LiquidBounce Cosmetics Engine player files: <gameDir>/skins/<player_name>.png & .json
-            let mod_skins_dir = instances::game_dir(data_dir, instance_id).join("skins");
-            if fs::create_dir_all(&mod_skins_dir).await.is_ok() {
-                let _ = fs::write(mod_skins_dir.join(format!("{player_name}.png")), &bytes).await;
-                let skin_meta = json!({
-                    "id": player_name,
-                    "model": active.model,
-                });
-                let _ = fs::write(
-                    mod_skins_dir.join(format!("{player_name}.json")),
-                    serde_json::to_vec_pretty(&skin_meta).unwrap_or_default(),
-                )
-                .await;
-            }
-
-            // Also write player-specific CustomSkinLoader files: <player_name>.png and <player_name>.json
-            let csl_dir = instances::game_dir(data_dir, instance_id)
-                .join("CustomSkinLoader")
-                .join("LocalSkin")
-                .join("skins");
-            if fs::create_dir_all(&csl_dir).await.is_ok() {
-                let _ = fs::write(csl_dir.join(format!("{player_name}.png")), &bytes).await;
-                let csl_meta = json!({
-                    "type": if active.model == "slim" { "slim" } else { "default" }
-                });
-                let _ = fs::write(
-                    csl_dir.join(format!("{player_name}.json")),
-                    serde_json::to_vec_pretty(&csl_meta).unwrap_or_default(),
-                )
-                .await;
-            }
-
-            // Auto-upload active skin to backend server so other multiplayer players can see it
-            let upload_url = format!(
-                "{}/api/skin/{}?model={}",
-                base_url,
-                player_name,
-                if active.model == "slim" { "slim" } else { "classic" }
-            );
-            let client = HTTP_CLIENT.clone();
-            let bytes_clone = bytes.clone();
-            let uuid_clone = player_uuid.to_string();
-            tokio::spawn(async move {
-                let _ = client
-                    .post(&upload_url)
-                    .header("Content-Type", "image/png")
-                    .header("X-User-UUID", &uuid_clone)
-                    .body(bytes_clone)
-                    .send()
+            if !is_default {
+                // Dedicated LiquidBounce Cosmetics Engine player files: <gameDir>/skins/<player_name>.png & .json
+                let mod_skins_dir = instances::game_dir(data_dir, instance_id).join("skins");
+                if fs::create_dir_all(&mod_skins_dir).await.is_ok() {
+                    let _ = fs::write(mod_skins_dir.join(format!("{player_name}.png")), &bytes).await;
+                    let skin_meta = json!({
+                        "id": player_name,
+                        "model": active.model,
+                    });
+                    let _ = fs::write(
+                        mod_skins_dir.join(format!("{player_name}.json")),
+                        serde_json::to_vec_pretty(&skin_meta).unwrap_or_default(),
+                    )
                     .await;
-            });
+                }
+
+                // Also write player-specific CustomSkinLoader files: <player_name>.png and <player_name>.json
+                let csl_dir = instances::game_dir(data_dir, instance_id)
+                    .join("CustomSkinLoader")
+                    .join("LocalSkin")
+                    .join("skins");
+                if fs::create_dir_all(&csl_dir).await.is_ok() {
+                    let _ = fs::write(csl_dir.join(format!("{player_name}.png")), &bytes).await;
+                    let csl_meta = json!({
+                        "type": if active.model == "slim" { "slim" } else { "default" }
+                    });
+                    let _ = fs::write(
+                        csl_dir.join(format!("{player_name}.json")),
+                        serde_json::to_vec_pretty(&csl_meta).unwrap_or_default(),
+                    )
+                    .await;
+                }
+
+                // Auto-upload custom skin to backend server so other multiplayer players can see it
+                let upload_url = format!(
+                    "{}/api/skin/{}?model={}",
+                    base_url,
+                    player_name,
+                    if active.model == "slim" { "slim" } else { "classic" }
+                );
+                let client = HTTP_CLIENT.clone();
+                let bytes_clone = bytes.clone();
+                let uuid_clone = player_uuid.to_string();
+                tokio::spawn(async move {
+                    let _ = client
+                        .post(&upload_url)
+                        .header("Content-Type", "image/png")
+                        .header("X-User-UUID", &uuid_clone)
+                        .body(bytes_clone)
+                        .send()
+                        .await;
+                });
+            } else {
+                // Remove player-specific overrides in instance if using default skin
+                let mod_skins_dir = instances::game_dir(data_dir, instance_id).join("skins");
+                let _ = fs::remove_file(mod_skins_dir.join(format!("{player_name}.png"))).await;
+                let _ = fs::remove_file(mod_skins_dir.join(format!("{player_name}.json"))).await;
+            }
         }
     }
 
