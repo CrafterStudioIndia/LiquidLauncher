@@ -521,7 +521,7 @@ pub async fn check_and_fetch_release_jar(
 const DEFAULT_CLIENT_JAR_URL: &str =
     "https://github.com/CrafterStudioIndia/LiquidBounce/releases/download/v1.0.0newstuff/liquidbounce-0.37.0.jar";
 const DEFAULT_CLIENT_JAR_SHA256: &str =
-    "3f16429fbaf4b7cc8756ca037a983b8bd63a8ef063fff5afe26f803026486038";
+    "256990266da47af763cc18b214655f319025eea71987b85b203a42dd81c14de8";
 
 pub async fn download_client_from_github(destination: &Path) -> Result<()> {
     let url = std::env::var("LIQUID_CLIENT_JAR_URL")
