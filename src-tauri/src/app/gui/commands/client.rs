@@ -315,6 +315,8 @@ pub(crate) async fn run_client(
 
     let mut jvm_args = options.start_options.jvm_args.clone().unwrap_or_default();
     jvm_args.push(format!("-Dliquid.backend.url={}", backend_url));
+    // Fix for libflite.so missing library error
+    jvm_args.push("-Djna.nosys=true".to_string());
 
     let parameters = StartParameter {
         java_distribution: options.start_options.java_distribution.clone(),
