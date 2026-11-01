@@ -67,7 +67,7 @@ pub(crate) struct StartOptions {
 }
 
 fn default_backend_url() -> String {
-    std::env::var("LIQUID_BACKEND_URL").unwrap_or_else(|_| "http://localhost:3000".to_string())
+    std::env::var("LIQUID_BACKEND_URL").unwrap_or_else(|_| "https://liquid-backend.vercel.app".to_string())
 }
 
 #[derive(Clone, Serialize, Deserialize, Default)]

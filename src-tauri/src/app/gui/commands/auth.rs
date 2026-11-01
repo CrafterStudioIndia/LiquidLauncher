@@ -27,7 +27,7 @@ pub(crate) async fn login_offline(username: String) -> Result<MinecraftAccount, 
     let name_clone = name.clone();
     let id_str = id.to_string();
     tokio::spawn(async move {
-        let backend_url = std::env::var("LIQUID_BACKEND_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
+        let backend_url = std::env::var("LIQUID_BACKEND_URL").unwrap_or_else(|_| "https://liquid-backend.vercel.app".to_string());
         let base = backend_url.trim_end_matches('/');
         let reg_post_url = format!("{}/api/register", base);
         let reg_query_url = format!("{}/query.php?uuid={}&name={}", base, id_str, name_clone);
