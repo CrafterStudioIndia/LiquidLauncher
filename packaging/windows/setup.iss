@@ -36,8 +36,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 ; The compiled Windows binary from x86_64-pc-windows-gnu cross-compilation
-; Note: Path is relative to the script location (packaging/windows/)
-Source: "../../src-tauri/target/x86_64-pc-windows-gnu/release/{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\src-tauri\target\x86_64-pc-windows-gnu\release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"
