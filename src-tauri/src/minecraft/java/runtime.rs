@@ -44,6 +44,7 @@ impl JavaRuntime {
             cmd.arg(&self.0);
             cmd
         } else {
+            #[allow(unused_mut)]
             let mut cmd = Command::new(&self.0);
             #[cfg(target_os = "linux")]
             {
