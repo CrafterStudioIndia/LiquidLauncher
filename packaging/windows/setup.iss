@@ -36,63 +36,64 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Code]
 {*
-  Function to prompt user for the EXE file location
-  Returns the path to liquidlauncher.exe
+  Function to get the EXE path - tries multiple locations
+  If not found, prompts user with InputQuery
 *}
-function GetExePath(Param: string): string;
+function GetExePath(): string;
 var
-  defaultPath: string;
-  resultPath: string;
+  path1, path2, path3: string;
 begin
-  { Try default cross-compiled path }
-  defaultPath := ExpandConstant('{src}\..\..\src-tauri\target\x86_64-pc-windows-gnu\release\' + Param);
-  if FileExists(defaultPath) then
+  Result := '';
+  
+  { Try path 1: cross-compiled relative path }
+  path1 := '..\..\src-tauri\target\x86_64-pc-windows-gnu\release\liquidlauncher.exe';
+  if FileExists(path1) then
   begin
-    resultPath := defaultPath;
-  end
-  else
+    Result := path1;
+    Exit;
+  end;
+  
+  { Try path 2: native build relative path }
+  path2 := '..\..\src-tauri\target\release\liquidlauncher.exe';
+  if FileExists(path2) then
   begin
-    { Try alternative path }
-    defaultPath := ExpandConstant('{src}\..\..\src-tauri\target\release\' + Param);
-    if FileExists(defaultPath) then
+    Result := path2;
+    Exit;
+  end;
+  
+  { Try path 3: absolute Linux path (for Wine) }
+  path3 := '/home/crafter/Documents/Projects/LiquidRemoval/LiquidLauncher/src-tauri/target/x86_64-pc-windows-gnu/release/liquidlauncher.exe';
+  if FileExists(path3) then
+  begin
+    Result := path3;
+    Exit;
+  end;
+  
+  { Prompt user if not found at any default location }
+  if InputQuery('EXE File Location', 'Enter the full path to liquidlauncher.exe:', '', Result, 1024) then
+  begin
+    if not FileExists(Result) then
     begin
-      resultPath := defaultPath;
-    end
-    else
-    begin
-      { Prompt user to browse for the file }
-      if InputQuery('EXE File Location', 'Please enter the full path to ' + Param + ':', defaultPath, resultPath, 512) then
-      begin
-        if not FileExists(resultPath) then
-        begin
-          MsgBox('File not found: ' + resultPath, mbError, MB_OK);
-          resultPath := '';
-        end;
-      end;
+      MsgBox('File not found: ' + Result, mbError, MB_OK);
+      Result := '';
     end;
   end;
-  Result := resultPath;
 end;
 
 {*
-  Function to check if the EXE file exists at the specified path
-  Used in the [Files] section Check parameter
+  Function to check if EXE exists - called by [Files] Check parameter
 *}
-function CheckExePath(Param: string): boolean;
-var
-  path: string;
+function CheckExeExists(Param: string): boolean;
 begin
-  path := GetExePath(Param);
-  Result := (path <> '');
+  Result := (GetExePath() <> '');
 end;
 
 [Files]
-; The compiled Windows binary - will prompt user if not found
-Source: "..\..\src-tauri\target\x86_64-pc-windows-gnu\release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion; Check: CheckExePath('{#MyAppExeName}')
+Source: "..\..\src-tauri\target\x86_64-pc-windows-gnu\release\liquidlauncher.exe"; DestDir: "{app}"; Flags: ignoreversion; Check: CheckExeExists('dummy')
 
 [Icons]
-Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\liquidlauncher.exe"; IconFilename: "{app}\liquidlauncher.exe"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\liquidlauncher.exe"; IconFilename: "{app}\liquidlauncher.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\liquidlauncher.exe"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
