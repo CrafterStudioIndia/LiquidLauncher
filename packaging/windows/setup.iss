@@ -34,10 +34,61 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
+[Code]
+{*
+  Function to prompt user for the EXE file location
+  Returns the path to liquidlauncher.exe
+*}
+function GetExePath(Param: string): string;
+var
+  defaultPath: string;
+  resultPath: string;
+begin
+  { Try default cross-compiled path }
+  defaultPath := ExpandConstant('{src}\..\..\src-tauri\target\x86_64-pc-windows-gnu\release\' + Param);
+  if FileExists(defaultPath) then
+  begin
+    resultPath := defaultPath;
+  end
+  else
+  begin
+    { Try alternative path }
+    defaultPath := ExpandConstant('{src}\..\..\src-tauri\target\release\' + Param);
+    if FileExists(defaultPath) then
+    begin
+      resultPath := defaultPath;
+    end
+    else
+    begin
+      { Prompt user to browse for the file }
+      if InputQuery('EXE File Location', 'Please enter the full path to ' + Param + ':', defaultPath, resultPath, 512) then
+      begin
+        if not FileExists(resultPath) then
+        begin
+          MsgBox('File not found: ' + resultPath, mbError, MB_OK);
+          resultPath := '';
+        end;
+      end;
+    end;
+  end;
+  Result := resultPath;
+end;
+
+{*
+  Function to check if the EXE file exists at the specified path
+  Used in the [Files] section Check parameter
+*}
+function CheckExePath(Param: string): boolean;
+var
+  path: string;
+begin
+  path := GetExePath(Param);
+  Result := (path <> '');
+end;
+
 [Files]
-; The compiled Windows binary from x86_64-pc-windows-gnu cross-compilation
-; Use absolute path to avoid Wine path resolution issues
-Source: "/home/crafter/Documents/Projects/LiquidRemoval/LiquidLauncher/src-tauri/target/x86_64-pc-windows-gnu/release/{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+; The compiled Windows binary - will prompt user if not found
+Source: "..\..\src-tauri\target\x86_64-pc-windows-gnu\release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion; Check: CheckExePath('{#MyAppExeName}')
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"
@@ -45,4 +96,3 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilen
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
-
