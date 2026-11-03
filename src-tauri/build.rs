@@ -1,7 +1,7 @@
 /*
  * This file is part of LiquidLauncher (https://github.com/CCBlueX/LiquidLauncher)
  *
- * Copyright (c) 2015 - 2024 CCBlueX
+ * Copyright (c) 2015 - 2026 CCBlueX
  *
  * LiquidLauncher is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,5 +18,8 @@
  */
 
 fn main() {
-    tauri_build::build()
+    let mut windows = tauri_build::WindowsAttributes::new();
+    windows = windows.app_manifest(include_str!("app.manifest"));
+    let attrs = tauri_build::Attributes::new().windows_attributes(windows);
+    tauri_build::try_build(attrs).expect("failed to run tauri-build");
 }

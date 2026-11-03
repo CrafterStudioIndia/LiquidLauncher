@@ -1,5 +1,5 @@
 ; Inno Setup 6 Script for LiquidLauncher
-; Generated for standalone Windows installer packaging
+; Configured for Windows compatibility, security mitigations, and user-level installation
 
 #define MyAppName "LiquidLauncher"
 #define MyAppVersion "0.7.1"
@@ -27,6 +27,17 @@ WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog
+MinVersion=6.1sp1
+SignedUninstaller=no
+
+; Version Information for Windows Explorer & SmartScreen reputation
+VersionInfoVersion={#MyAppVersion}.0
+VersionInfoCompany={#MyAppPublisher}
+VersionInfoDescription={#MyAppName} Setup
+VersionInfoCopyright=Copyright (C) 2015-2026 {#MyAppPublisher}
+VersionInfoProductName={#MyAppName}
+VersionInfoProductVersion={#MyAppVersion}
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -64,7 +75,7 @@ begin
 end;
 
 [Files]
-; The compiled Windows binary - checks multiple locations
+; The compiled Windows binary
 Source: "..\..\src-tauri\target\x86_64-pc-windows-gnu\release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion; Check: CheckExeExists('{#MyAppExeName}')
 
 [Icons]

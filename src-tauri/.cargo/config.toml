@@ -1,0 +1,12 @@
+[target.x86_64-pc-windows-gnu]
+rustflags = [
+    "-C", "link-arg=-Wl,--dynamicbase",
+    "-C", "link-arg=-Wl,--nxcompat",
+    "-C", "link-arg=-Wl,--high-entropy-va",
+    "-C", "link-arg=-Wl,--tsaware",
+    "-C", "link-arg=-Wl,--major-os-version,6",
+    "-C", "link-arg=-Wl,--minor-os-version,0",
+    "-C", "link-arg=-Wl,--major-subsystem-version,6",
+    "-C", "link-arg=-Wl,--minor-subsystem-version,0",
+]
+

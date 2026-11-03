@@ -79,13 +79,15 @@ if [ "$HAS_TARGET" -eq 1 ] && [ "$HAS_MINGW" -eq 1 ]; then
         echo "[*] Found iscc, building Inno Setup installer..."
         iscc packaging/windows/setup.iss
     elif [ -f "node_modules/.bin/innosetup-compiler" ]; then
-        echo "[*] Running npm innosetup-compiler on packaging/windows/setup.iss..."
-        ./node_modules/.bin/innosetup-compiler packaging/windows/setup.iss || true
-    else
-        echo "[i] To package into an installer with Inno Setup:"
-        echo "    - Run: npm run iss (powered by innosetup-compiler)"
-        echo "    - On Windows: Run ISCC on 'packaging/windows/setup.iss' or install Inno Setup 6"
-        echo "    - Standalone executable is ready to use immediately at: $EXE_PATH"
+        echo "[*] Running innosetup-compiler on packaging/windows/setup.iss..."
+        mkdir -p .wine
+        WINEPREFIX="$PWD/.wine" ./node_modules/.bin/innosetup-compiler packaging/windows/setup.iss || true
+    fi
+
+    INNO_OUT="src-tauri/target/release/bundle/inno/LiquidLauncher_0.7.1_x64_setup.exe"
+    if [ -f "$INNO_OUT" ]; then
+        echo "[*] Inno Setup installer ready: $INNO_OUT"
+        ls -lh "$INNO_OUT"
     fi
 else
     echo ""
