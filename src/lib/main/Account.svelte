@@ -93,20 +93,25 @@
     .account {
         display: grid;
         grid-template-columns: max-content auto max-content;
-        background-color: rgba(0, 0, 0, .36);
-        height: 50px;
-        border-radius: 6px;
-        padding: 8px 12px;
-        gap: 8px;
+        background: rgba(15, 23, 42, 0.65);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        height: 52px;
+        border-radius: 10px;
+        padding: 8px 14px;
+        gap: 10px;
         align-items: center;
-        min-width: 200px;
+        min-width: 210px;
         border: 1px solid rgba(255, 255, 255, 0.08);
-        transition: border-color 0.15s ease, background-color 0.15s ease;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     .account:hover {
-        border-color: rgba(255, 255, 255, 0.18);
-        background-color: rgba(0, 0, 0, .45);
+        border-color: rgba(99, 102, 241, 0.45);
+        background: rgba(30, 41, 59, 0.8);
+        transform: translateY(-1px);
+        box-shadow: 0 8px 24px rgba(59, 130, 246, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
     }
 
     .avatar-btn {
@@ -118,18 +123,18 @@
     }
 
     .avatar {
-        border-radius: 6px;
-        height: 35px;
-        width: 35px;
+        border-radius: 8px;
+        height: 36px;
+        width: 36px;
         overflow: hidden;
         background-color: rgba(255, 255, 255, .1);
         image-rendering: pixelated;
         border: 1px solid rgba(255, 255, 255, 0.15);
-        transition: transform 0.15s ease, border-color 0.15s ease;
+        transition: transform 0.2s ease, border-color 0.2s ease;
     }
 
     .avatar-btn:hover .avatar {
-        transform: scale(1.05);
+        transform: scale(1.08);
         border-color: #3b82f6;
     }
 
@@ -137,15 +142,16 @@
         position: absolute;
         bottom: -2px;
         right: -2px;
-        width: 13px;
-        height: 13px;
+        width: 14px;
+        height: 14px;
         border-radius: 50%;
-        background: #2563eb;
+        background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
         color: white;
         display: flex;
         align-items: center;
         justify-content: center;
-        border: 1px solid #111827;
+        border: 1px solid #0f172a;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
     }
 
     .details {

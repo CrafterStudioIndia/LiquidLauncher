@@ -7,11 +7,14 @@
 <style>
     .text-status {
         color: white;
-        align-items: stretch;
         display: flex;
         align-items: center;
-        border-bottom: solid 2px #4677FF;
+        border-bottom: 2px solid transparent;
+        border-image: linear-gradient(90deg, #3b82f6, #8b5cf6) 1;
         width: max-content;
         margin: 0 auto;
+        font-weight: 500;
+        font-size: 13px;
+        letter-spacing: 0.01em;
     }
 </style>

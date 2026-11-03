@@ -75,6 +75,7 @@
         position: relative;
         display: flex;
         align-items: flex-end;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);
     }
 
     .version-info .banner .title {
@@ -82,28 +83,35 @@
         color: white;
         font-size: 18px;
         margin: 10px 20px;
+        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
     }
 
     .version-info .date {
         font-size: 12px;
         padding: 5px 12px;
-        background-color: rgba(0, 0, 0, .58);
+        background-color: rgba(0, 0, 0, 0.65);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         color: white;
-        border-radius: 4px;
+        border-radius: 6px;
         position: absolute;
         top: 8px;
         right: 8px;
+        font-weight: 500;
     }
 
     .instance-selector {
         display: flex;
         flex-direction: column;
-        row-gap: 5px;
+        row-gap: 6px;
     }
 
     .label {
         font-size: 12px;
-        color: rgba(255, 255, 255, .5);
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.65);
+        letter-spacing: 0.02em;
     }
 
     .instance-row {
@@ -114,34 +122,55 @@
 
     .select {
         width: 100%;
-        background-color: rgba(0, 0, 0, .26);
-        border: none;
-        border-bottom: solid 1px #4677FF;
+        background-color: rgba(15, 23, 42, 0.65);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         color: white;
         font-family: "Inter", sans-serif;
-        padding: 7px;
-        border-radius: 4px;
+        font-size: 13px;
+        padding: 9px 12px;
+        border-radius: 8px;
         cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.25);
+    }
+
+    .select:focus {
+        border-color: #60a5fa;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
     }
 
     .select option {
-        background-color: white;
-        color: black;
+        background-color: #0f172a;
+        color: white;
     }
 
     .manage {
-        background-color: rgba(0, 0, 0, .26);
-        border: solid 1px #4677FF;
-        border-radius: 4px;
+        background: rgba(30, 41, 59, 0.7);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
         color: white;
         font-family: "Inter", sans-serif;
         font-size: 12px;
-        padding: 0 12px;
+        font-weight: 600;
+        padding: 0 14px;
         cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
     }
 
     .manage:hover {
-        background-color: rgba(70, 119, 255, .2);
+        background-color: rgba(51, 65, 85, 0.9);
+        border-color: rgba(99, 102, 241, 0.4);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+
+    .manage:active {
+        transform: translateY(0);
     }
 
     .version-selector {
