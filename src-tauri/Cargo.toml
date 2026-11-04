@@ -87,6 +87,6 @@ default = [ "custom-protocol" ]
 custom-protocol = [ "tauri/custom-protocol" ]
 
 [profile.release]
-strip = true
+strip = "debuginfo"
 lto = "thin"
 codegen-units = 16
