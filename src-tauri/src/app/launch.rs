@@ -493,7 +493,7 @@ pub async fn check_and_fetch_release_jar(
             let _ = fs::create_dir_all(parent).await;
         }
         let cache_content = CachedReleaseJar {
-            tag: "v1.0.3".to_string(),
+            tag: "v1.0.4".to_string(),
             asset_url: direct_url.clone(),
             jar_name: "liquidbounce-0.37.0.jar".to_string(),
             digest: Some(expected_hash),
@@ -504,8 +504,8 @@ pub async fn check_and_fetch_release_jar(
         }
 
         let prompt_info = ReleasePromptInfo {
-            tag: "v1.0.3".to_string(),
-            release_name: "LiquidBounce 0.37.0 (v1.0.3)".to_string(),
+            tag: "v1.0.4".to_string(),
+            release_name: "LiquidBounce 0.37.0 (v1.0.4)".to_string(),
             time_ago: "Just now".to_string(),
             jar_name: "liquidbounce-0.37.0.jar".to_string(),
             download_url: direct_url,
@@ -519,9 +519,9 @@ pub async fn check_and_fetch_release_jar(
 }
 
 const DEFAULT_CLIENT_JAR_URL: &str =
-    "https://github.com/CrafterStudioIndia/LiquidBounce/releases/download/v1.0.3/liquidbounce-0.37.0.jar";
+    "https://github.com/CrafterStudioIndia/LiquidBounce/releases/download/v1.0.4/liquidbounce-0.37.0.jar";
 const DEFAULT_CLIENT_JAR_SHA256: &str =
-    "7166b3daa7984143691a45bc37f21ae5abe2e7bffd80318794ad0cb9db91dbbd";
+    "e023ee239d8de9913d1ee4de52efb253410a8f3b2ec2de18da1f905b0ce60395";
 
 pub async fn download_client_from_github(destination: &Path) -> Result<()> {
     let url = std::env::var("LIQUID_CLIENT_JAR_URL")

@@ -33,7 +33,7 @@ elif [ -f "$JAR_FALLBACK" ]; then
     echo "[*] Found release mod jar: $JAR_FALLBACK"
 else
     echo "[*] No local jar found. Downloading release jar from GitHub..."
-    curl -fsSL -o "$JAR_FALLBACK" "https://github.com/CrafterStudioIndia/LiquidBounce/releases/download/v1.0.3/liquidbounce-0.37.0.jar" || {
+    curl -fsSL -o "$JAR_FALLBACK" "https://github.com/CrafterStudioIndia/LiquidBounce/releases/download/v1.0.4/liquidbounce-0.37.0.jar" || {
         echo "[!] Warning: Download failed. LiquidLauncher will download the mod upon launch."
     }
 fi
