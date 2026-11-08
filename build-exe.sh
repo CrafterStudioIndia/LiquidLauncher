@@ -66,6 +66,15 @@ if [ "$HAS_TARGET" -eq 1 ] && [ "$HAS_MINGW" -eq 1 ]; then
     bun run tauri build --target "$TARGET" --no-bundle
     
     EXE_PATH="src-tauri/target/$TARGET/release/liquidlauncher.exe"
+    DLL_PATH="src-tauri/target/$TARGET/release/WebView2Loader.dll"
+    if [ ! -f "$DLL_PATH" ]; then
+        echo "[*] Locating WebView2Loader.dll..."
+        FOUND_DLL="$(find src-tauri/target/$TARGET/release/build/ -name "WebView2Loader.dll" 2>/dev/null | grep "/x64/" | head -n 1 || true)"
+        if [ -n "$FOUND_DLL" ] && [ -f "$FOUND_DLL" ]; then
+            cp "$FOUND_DLL" "$DLL_PATH"
+            echo "[*] Auto-copied $FOUND_DLL to $DLL_PATH"
+        fi
+    fi
     echo ""
     echo "========================================="
     echo "     Windows Compilation Succeeded!      "
